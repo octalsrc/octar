@@ -1,0 +1,45 @@
+name:                octar
+version:             0.3.1
+synopsis:            archive manager
+license:             GPL-3
+license-file:        LICENSE
+author:              octalsrc
+maintainer:          octal@octalsrc.org
+copyright:           2018 Nicholas V. Lewchenko
+build-type:          Simple
+extra-source-files:  ChangeLog.md
+cabal-version:       >=1.10
+
+library
+  exposed-modules:     Octar
+                     , Octar.CLI
+                     , Turtle.Ipfs
+  other-modules:       Octar.Index
+                     , Octar.Index.Frontend
+                     , Octar.Entry
+                     , Octar.Metadata
+                     , Octar.Method
+                     , Octar.Method.Common
+                     , Octar.CLI.Opts
+  build-depends:
+    base                 >= 4.10.0 && < 4.11,
+    aeson                >= 1.2.4 && < 1.3,
+    text                 >= 1.2.2 && < 1.3,
+    time                 >= 1.8.0 && < 1.9,
+    optparse-applicative >= 0.14.0 && < 0.15,
+    turtle               >= 1.4.5 && < 1.5,
+    yaml                 >= 0.8.28 && < 0.9,
+    foldl                >= 1.3.7 && < 1.4,
+    containers           >= 0.5.10 && < 0.6,
+    bytestring,
+    parsec,
+    mtl,
+    http-types
+  hs-source-dirs:      lib
+  default-language: Haskell2010
+
+executable octar
+  main-is:             Main.hs
+  build-depends:       base, octar
+  hs-source-dirs:      main
+  default-language:    Haskell2010
