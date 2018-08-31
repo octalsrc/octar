@@ -1,11 +1,24 @@
 name:                octar
 version:             0.3.1
-synopsis:            archive manager
+synopsis:            replicated archive organization
+category:            Database, Network
+description:
+  @octar@ is a library/tool for systematically fetching and labeling
+  data from a variety of sources.  It uses IPFS as a storage backend
+  and git as an index manager, which together provide:
+  .
+  1. Duplication avoidance
+  .
+  2. Easy replication/backups
+  .
+  3. Transparent access from multiple machines
+
 license:             GPL-3
 license-file:        LICENSE
 author:              octalsrc
 maintainer:          octal@octalsrc.org
-copyright:           2018 Nicholas V. Lewchenko
+homepage:            https://github.com/octalsrc/octar
+copyright:           (c) 2018 Nicholas V. Lewchenko
 build-type:          Simple
 extra-source-files:  ChangeLog.md
 cabal-version:       >=1.10
@@ -31,10 +44,10 @@ library
     yaml                 >= 0.8.28 && < 0.9,
     foldl                >= 1.3.7 && < 1.4,
     containers           >= 0.5.10 && < 0.6,
-    bytestring,
-    parsec,
-    mtl,
-    http-types
+    bytestring           >= 0.10.8 && < 0.11,
+    http-types           >= 0.9.1 && < 0.10,
+    mtl                  >= 2.2.2 && < 2.3,
+    parsec               >= 3.1.13 && < 3.2
   hs-source-dirs:      lib
   default-language: Haskell2010
 
