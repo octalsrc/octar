@@ -115,7 +115,8 @@ addPs (m :: m) = AddConf
 data BrowseConf = BrowseConf 
   { browseURI :: Maybe Text
   , browseAPI :: Maybe Text
-  , browseGateway :: Maybe Text }
+  , browseGateway :: Maybe Text
+  , browseOutpath :: Maybe FilePath }
   deriving (Eq,Ord)
 
 browsePs :: Parser BrowseConf
@@ -127,8 +128,14 @@ browsePs = BrowseConf
              <> metavar "API" 
              <> help "Custom IPFS API to use")
   <*> mtext (long "gateway"
+             <> short 'g'
              <> metavar "URI"
              <> help "IPFS gateway to use in directory links")
+  <*> (fmap fromText 
+       <$> mtext (short 'o'
+                  <> metavar "PATH"
+                  <> help "Write the directory to file instead \
+                          \of opening in $EDITOR"))
 
 
 mtext :: Mod OptionFields Text -> Parser (Maybe Text)

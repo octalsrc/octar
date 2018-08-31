@@ -107,7 +107,7 @@ mkOctarCLI version methodset = orDie $ do
       l2$ runPull' beh indxc
       l2$ writeWithDirs indx
 
-    Browse (BrowseConf muri mapi mgate) -> withTmpDir $ \tmp -> do
+    Browse (BrowseConf muri mapi mgate mpath) -> withTmpDir $ \tmp -> do
       let tmpFile = tmp <> fromText "asdf.org"
       mc <- case muri of
               Just uri -> withGitRepo uri $ \repo -> do
@@ -118,8 +118,12 @@ mkOctarCLI version methodset = orDie $ do
       let gateway = case mgate of
                       Just gate -> gate
                       Nothing -> "https://ipfs.io"
-      writeOrgDir gateway tmpFile mc
-      edit tmpFile
+      case mpath of
+        Just f -> writeOrgDir gateway f mc
+        Nothing -> do 
+          let tmpFile = tmp <> fromText "asdf.org"
+          writeOrgDir gateway tmpFile mc
+          edit tmpFile
       return (Right ())
 
 runPush' beh = 
