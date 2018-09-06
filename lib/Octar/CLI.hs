@@ -230,11 +230,15 @@ askSynopsis = MetaFrame
 
 gitCommit :: Turtle.FilePath -> Text -> IO ()
 gitCommit homedir msg = do 
+  current <- pwd
   cd homedir
   stdout (inproc "git" ["add","-u"] empty)
   stdout (inproc "git" ["commit","-m",msg,"-q"] empty)
+  cd current
 
 runGitCmd :: Turtle.FilePath -> [Text] -> IO ()
 runGitCmd homedir args = do 
+  current <- pwd
   cd homedir
   stdout (inproc "git" (args++["-q"]) empty)
+  cd current

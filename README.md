@@ -78,7 +78,7 @@ This saves the file, alongside a YAML-format metadata file,
       source: https://arxiv.org/pdf/1707.01747.pdf
     date: 2011-04-16T22:55:51
     message: Some paper
-    archivist: joe
+    archivist: Alice
     main: 1707.01747.pdf
 
 in IPFS, adding its link to an index of archived items.  You will now
