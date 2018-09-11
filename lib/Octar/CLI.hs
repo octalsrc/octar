@@ -21,9 +21,11 @@ import qualified Data.Map as Map
 
 import Octar
 import Turtle.Ipfs
+import Turtle.Git (sOrDie)
+import qualified Turtle.Git as Git
 import Octar.CLI.Opts
 
-version = "0.3.1"
+version = "0.3.1.1"
 
 refileSynopsis = "(To be refiled.)"
 
@@ -76,9 +78,10 @@ mkOctarCLI version methodset = orDie $ do
       entry <- storeEntry md ef
       l2$ writeWithDirs (addToIndex indx entry)
       l2$ putStrLn "Done." >> IO.hFlush IO.stdout
-      isGit <- testdir (indexConfigPath indxc <> fromText ".git")
+      isGit <- l2$ Git.isRepo (indexConfigPath indxc)
       if isGit
-         then do l2$ gitCommit (indexConfigPath indxc) "Add entry"
+         then do l2.sOrDie$ Git.addU (indexConfigPath indxc)
+                 l2.sOrDie$ Git.commit "Add entry" (indexConfigPath indxc)
                  l2$ putStrLn "Git-commited entry."
          else return ()
       if addDry c
@@ -89,8 +92,9 @@ mkOctarCLI version methodset = orDie $ do
       l2$ runPull' beh indxc
       case rmFromIndex indx p of
         Right indx' -> do 
-          l2$ writeIndex indx' >> writeWithDirs indx' 
-          l2$ gitCommit (indexConfigPath indxc) "Remove entry"
+          l2$ writeIndex indx' >> writeWithDirs indx'
+          l2.sOrDie$ Git.addU (indexConfigPath indxc)
+          l2.sOrDie$ Git.commit "Remove entry" (indexConfigPath indxc)
         Left e -> die e
       l2$ runPush' beh indxc
       return ()
@@ -131,7 +135,7 @@ runPush' beh =
      then runPush
      else const $ return (Right ())
 
-runPush indxc = runGitCmd (indexConfigPath indxc) ["push"] 
+runPush indxc = sOrDie (Git.push (indexConfigPath indxc))
                 >> return (Right ())
 
 runPull' beh = 
@@ -139,7 +143,7 @@ runPull' beh =
      then runPull
      else const $ return (Right ())
 
-runPull indxc = runGitCmd (indexConfigPath indxc) ["pull"] 
+runPull indxc = sOrDie (Git.pull (indexConfigPath indxc))
                 >> return (Right ())
 
 edit :: FilePath -> IO ()
@@ -151,7 +155,7 @@ edit f = do
 
 withGitRepo :: Text -> (FilePath -> IO a) -> IO a
 withGitRepo uri action = withTmpDir $ \repoDir -> do
-  runGitCmd repoDir ["clone",uri,"repo"]
+  Git.git ["clone",uri,"repo"] repoDir
   home >>= cd
   action $ repoDir <> fromText "repo"
 
@@ -227,18 +231,3 @@ askSynopsis = MetaFrame
              >> getLine))
   <*> (pure mempty)
   <*> (pure mempty)
-
-gitCommit :: Turtle.FilePath -> Text -> IO ()
-gitCommit homedir msg = do 
-  current <- pwd
-  cd homedir
-  stdout (inproc "git" ["add","-u"] empty)
-  stdout (inproc "git" ["commit","-m",msg,"-q"] empty)
-  cd current
-
-runGitCmd :: Turtle.FilePath -> [Text] -> IO ()
-runGitCmd homedir args = do 
-  current <- pwd
-  cd homedir
-  stdout (inproc "git" (args++["-q"]) empty)
-  cd current

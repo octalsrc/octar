@@ -1,5 +1,9 @@
 # Revision history for octar
 
+## 0.3.1.1 -- 2018-09-10
+
+* Fix bug caused by git-syncing
+
 ## 0.3.1 -- 2018-08-30
 
 * Add `browse` command to browse non-local indexes
