@@ -71,9 +71,8 @@ mfMain f = MetaFrame mempty mempty (Just f)
 mfMessage :: Text -> MetaFrame
 mfMessage t = MetaFrame t mempty mempty
 
-instance Monoid MetaFrame where
-  mempty = MetaFrame mempty mempty Nothing
-  mappend (MetaFrame s1 rs1 ep1) (MetaFrame s2 rs2 ep2) = 
+instance Semigroup MetaFrame where
+  (<>) (MetaFrame s1 rs1 ep1) (MetaFrame s2 rs2 ep2) = 
     MetaFrame (sp s1 s2) (rs1 ++ rs2) ep
     where ep = case ep2 of
                  Nothing -> ep1
@@ -82,6 +81,9 @@ instance Monoid MetaFrame where
                              || Text.length s2 == 0)
                         then Text.intercalate "\n\n" [s1,s2]
                         else s1 <> s2
+
+instance Monoid MetaFrame where
+  mempty = MetaFrame mempty mempty Nothing
 
 data Metadata = Metadata { metaMain :: MetaFrame
                          , date :: Timestamp
