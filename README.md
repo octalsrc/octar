@@ -1,6 +1,6 @@
 # `octar` - a replicated archive organizer #
 
-`[v0.3.1]`
+`[v0.3.1.x]`
 
 `octar` is a tool for systematically fetching and labeling data from a
 variety of sources.  It uses IPFS as a storage backend and git as an

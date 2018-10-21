@@ -25,7 +25,7 @@ import Turtle.Git (sOrDie)
 import qualified Turtle.Git as Git
 import Octar.CLI.Opts
 
-version = "0.3.1.1"
+version = "0.3.1.2"
 
 refileSynopsis = "(To be refiled.)"
 
@@ -62,54 +62,56 @@ mkOctarCLI version methodset = orDie $ do
   (indxc,beh) <- completeConfig conf
   case configCommand conf of
 
-    Add c -> withIndex indxc $ \indx -> do
-      l2$ runPull' beh indxc
-      ef <- l2$ mkEntryFrame
-      let ms = [case (addNoPrompt c, addCLIMessage c) of
-                  (_,Just m) -> return . mkSynopsis $ m
-                  (True,_) -> return . mkSynopsis $ refileSynopsis
-                  _ -> askSynopsisEdit
-               ,orDie$ fetchByConf c ef]
-      md <- l2$ mkMD (indexArchivistName indxc) =<< mmconcat ms
-      if addDry c
-         then die "Dry run, not writing to index."
-         else return ()
-      l2$ putStr "Storing entry...  " >> IO.hFlush IO.stdout
-      entry <- storeEntry md ef
-      l2$ writeWithDirs (addToIndex indx entry)
-      l2$ putStrLn "Done." >> IO.hFlush IO.stdout
-      isGit <- l2$ Git.isRepo (indexConfigPath indxc)
-      if isGit
-         then do l2.sOrDie$ Git.addU (indexConfigPath indxc)
-                 l2.sOrDie$ Git.commit "Add entry" (indexConfigPath indxc)
-                 l2$ putStrLn "Git-commited entry."
-         else return ()
-      if addDry c
-         then return ()
-         else l2$ runPush' beh indxc >> return ()
+    Add c -> do 
+      runPull' beh indxc
+      withIndex indxc $ \indx -> do
+        ef <- l2$ mkEntryFrame
+        let ms = [case (addNoPrompt c, addCLIMessage c) of
+                    (_,Just m) -> return . mkSynopsis $ m
+                    (True,_) -> return . mkSynopsis $ refileSynopsis
+                    _ -> askSynopsisEdit
+                 ,orDie$ fetchByConf c ef]
+        md <- l2$ mkMD (indexArchivistName indxc) =<< mmconcat ms
+        if addDry c
+           then die "Dry run, not writing to index."
+           else return ()
+        l2$ putStr "Storing entry...  " >> IO.hFlush IO.stdout
+        entry <- storeEntry md ef
+        l2$ writeWithDirs (addToIndex indx entry)
+        l2$ putStrLn "Done." >> IO.hFlush IO.stdout
+        isGit <- l2$ Git.isRepo (indexConfigPath indxc)
+        if isGit
+           then do l2.sOrDie$ Git.addU (indexConfigPath indxc)
+                   l2.sOrDie$ Git.commit "Add entry" (indexConfigPath indxc)
+                   l2$ putStrLn "Git-commited entry."
+           else return ()
+        if addDry c
+           then return ()
+           else l2$ runPush' beh indxc >> return ()
 
-    Rm p -> withIndex indxc $ \indx -> do
-      l2$ runPull' beh indxc
-      case rmFromIndex indx p of
-        Right indx' -> do 
-          l2$ writeIndex indx' >> writeWithDirs indx'
-          l2.sOrDie$ Git.addU (indexConfigPath indxc)
-          l2.sOrDie$ Git.commit "Remove entry" (indexConfigPath indxc)
-        Left e -> die e
-      l2$ runPush' beh indxc
-      return ()
+    Rm p -> do
+      runPull' beh indxc
+      withIndex indxc $ \indx -> do
+        case rmFromIndex indx p of
+          Right indx' -> do 
+            l2$ writeIndex indx' >> writeWithDirs indx'
+            l2.sOrDie$ Git.addU (indexConfigPath indxc)
+            l2.sOrDie$ Git.commit "Remove entry" (indexConfigPath indxc)
+          Left e -> die e
+        l2$ runPush' beh indxc
+        return ()
 
-    Pin -> withApiM (indexConfigApi indxc) $ do
-      l2$ runPull' beh indxc
-      pin =<< (l2.orDie$ loadPF (pfPath indxc))
+    Pin -> do
+      runPull' beh indxc
+      withApiM (indexConfigApi indxc) (pin =<< (l2.orDie$ loadPF (pfPath indxc)))
 
     Push -> runPush indxc
 
     Pull -> runPull indxc
 
-    Refresh -> withIndex indxc $ \indx -> do
-      l2$ runPull' beh indxc
-      l2$ writeWithDirs indx
+    Refresh -> do
+      runPull' beh indxc
+      withIndex indxc (l2 . writeWithDirs)
 
     Browse (BrowseConf muri mapi mgate mpath) -> withTmpDir $ \tmp -> do
       let tmpFile = tmp <> fromText "asdf.org"

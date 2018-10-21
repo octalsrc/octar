@@ -1,5 +1,9 @@
 # Revision history for octar
 
+## 0.3.1.2 -- 2018-10-21
+
+* Fix another git-syncing bug
+
 ## 0.3.1.1 -- 2018-09-10
 
 * Fix bug caused by git-syncing
