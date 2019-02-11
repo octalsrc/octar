@@ -31,6 +31,7 @@ library
   other-modules:       Octar.Index
                      , Octar.Index.Frontend
                      , Octar.Index2
+                     , Octar.Discard
                      , Octar.Entry
                      , Octar.Metadata
                      , Octar.Method

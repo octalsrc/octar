@@ -17,6 +17,7 @@ module Octar.Index
   , rmFromIndex
   , writeIndex
   , MetaCache (..)
+  , addMetaCache
   ) where
 
 import Prelude hiding (FilePath)
