@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Octar.CLI 
   ( octarStock
@@ -18,12 +19,17 @@ import Data.Text (Text,pack,unpack,stripEnd)
 import qualified Data.Text as Text
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Control.Lens
 
 import Octar
 import Turtle.Ipfs
 import Turtle.Git (sOrDie)
 import qualified Turtle.Git as Git
 import Octar.CLI.Opts
+
+import Network.Discard
+import qualified Data.EventGraph
+import Lang.Carol hiding (Add)
 
 version = "0.4.0"
 
@@ -62,10 +68,47 @@ mkOctarCLI version methodset = orDie $ do
   mc <- loadConfigFile conf
   case configCommand conf of
   
-    Add c -> do 
-      case chooseIndex mc c of
-        Right (i,s) -> return (Right ())
-        Left e -> die (Text.pack e)
+    Add c -> case chooseIndex mc c of
+      Right (i,s) -> do 
+        efr <- mkEntryFrame
+        let ms = [case (addNoPrompt c, addCLIMessage c) of
+                    (_,Just m) -> return . mkSynopsis $ m
+                    (True,_) -> return . mkSynopsis $ refileSynopsis
+                    _ -> askSynopsisEdit
+                 ,orDie$ fetchByConf c efr]
+        md <- mkMD (Text.pack $ i^.indexArchivist) =<< mmconcat ms
+        if addDry c
+           then die "Dry run, not writing to index."
+           else return ()
+        putStr "Storing entry...  " >> IO.hFlush IO.stdout
+        ref <- withApiM (Text.pack <$> s^.storageApi) (storeEntry md efr) >>= \case
+          Right ent -> return . fst . entryPair $ ent
+          Left e -> die e
+
+        (settings,await) <- awaitNetwork defaultDManagerSettings (Just 1000000)
+        let script i man = do
+              await
+              runCarolR man $ issue (ef$ RGAppend ref)
+        case i^.indexPersist of
+          Just sfile -> runNodeFile 
+                          (i^.indexNodeId) 
+                          (s^.storageApiPort) 
+                          (i^.indexNetwork)
+                          sfile
+                          settings
+                          script
+          Nothing -> runNode 
+                       (i^.indexNodeId) 
+                       (s^.storageApiPort) 
+                       (i^.indexNetwork)
+                       mempty
+                       Data.EventGraph.empty
+                       settings
+                       script 
+                     >> return ()
+        return (Right ())
+
+      Left e -> die (Text.pack e)
 
     Rm c -> return (Right ())
 

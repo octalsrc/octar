@@ -23,6 +23,7 @@ module Octar.Config
 
   , StorageConfig
   , storageApi
+  , storageApiPort
   , storageGateway
   
   ) where
@@ -38,6 +39,7 @@ import Data.Maybe (fromJust)
 
 data StorageConfig = StorageConfig 
   { _storageApi :: Maybe String
+  , _storageApiPort :: Int
   , _storageGateway :: Maybe String }
 
 makeLenses ''StorageConfig
@@ -45,6 +47,7 @@ makeLenses ''StorageConfig
 instance FromJSON StorageConfig where
   parseJSON = withObject "StorageConfig" $ \v -> StorageConfig
     <$> v .:? "api"
+    <*> v .: "api-port"
     <*> v .:? "gateway"
 
 data IndexConfig = IndexConfig
