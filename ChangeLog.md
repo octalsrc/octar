@@ -1,5 +1,10 @@
 # Revision history for octar
 
+## 0.4.0 -- ???
+
+* Change index management backend from Git to Discard
+* Add mirror daemon
+
 ## 0.3.1.2 -- 2018-10-21
 
 * Fix another git-syncing bug

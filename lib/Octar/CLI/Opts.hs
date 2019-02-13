@@ -1,17 +1,17 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Octar.CLI.Opts
-  ( ConfigCLI (configConfFile, configIndexChoice, configCommand, configBehavior)
-  , Behavior (..)
+  ( ConfigCLI (configConfFile, configCommand)
   , Command (..)
   , AddConf (..)
-  , BrowseConf (..)
+  , chooseIndex
+  , RmConf (..)
+  , MirrorConf (..)
   , getConfigCLI
-  , completeConfig
+  , loadConfigFile
   ) where
-
-import Prelude hiding (FilePath)
 
 import Options.Applicative
 import Data.Monoid ((<>))
@@ -20,8 +20,10 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Control.Lens hiding (argument)
+import Data.Maybe (fromJust)
 
-import Turtle (FilePath,home,format,fp,die,need,fromText)
+import Turtle (home,format,fp,die,need,fromText,testfile)
 
 import Turtle.Ipfs
 import Octar
@@ -37,16 +39,10 @@ cmds =
       "Add the file located at TARGET to the archive"
   , (mkcmd "rm" Rm (const rmPs))
       "Remove the entry with PATH from the archive"
-  , (mkcmd "pin" id (const.pure$Pin))
-      "Pin all currently archived entries"
-  , (mkcmd "push" id (const.pure$Push))
-      "Run \"git push\" for the octar index"
-  , (mkcmd "pull" id (const.pure$Pull))
-      "Run \"git pull\" for the octar index"
-  , (mkcmd "refresh" id (const.pure$Refresh))
+  , (mkcmd "sync" id (const.pure$Refresh))
       "Update metacache and directory for index"
-  , (mkcmd "browse" Browse (const browsePs))
-      "Open a temporary directory for the indicated index"]
+  , (mkcmd "mirror" Mirror (const mirrorPs))
+      "Run a mirror" ]
 
 mkcmd :: (MethodSet m) 
       => String 
@@ -58,32 +54,37 @@ mkcmd s f p d = \m -> command s (info (f <$> (p m <**> helper)) (progDesc d))
 
 data ConfigCLI m = ConfigCLI 
   { configConfFile :: Maybe FilePath
-  , configIndexChoice :: Maybe Text
-  , configBehavior :: Behavior
   , configCommand :: Command m }
-  deriving (Eq,Ord)
-
-data Behavior = Behavior
-  { behaviorNoSync :: Bool }
   deriving (Eq,Ord)
 
 data Command m =
     Add (AddConf m)
-  | Rm IpfsPath
-  | Pin
-  | Push
-  | Pull
+  | Rm RmConf
   | Refresh
-  | Browse BrowseConf
+  | Mirror MirrorConf
   deriving (Eq,Ord)
+
+data MirrorConf = MirrorConf deriving (Eq,Ord)
+
+mirrorPs = pure MirrorConf
 
 data AddConf m = AddConf
   { addTarget :: Text
   , addMethod :: MethodHint m
   , addDry :: Bool
   , addNoPrompt :: Bool
-  , addCLIMessage :: Maybe Text }
+  , addCLIMessage :: Maybe Text
+  , addIndexChoice :: Maybe Text }
   deriving (Eq,Ord)
+
+chooseIndex :: MultiConfig -> AddConf m -> Either String (IndexConfig, StorageConfig)
+chooseIndex mc ac = case Text.unpack <$> addIndexChoice ac of
+  Just iname -> case mc^.indexWithStorage (indexes.at iname) of
+    Just is -> Right is
+    Nothing -> Left $ "Index \"" <> iname <> "\" is not configured."
+  Nothing -> case mc^.indexWithStorage defaultIndex of
+    Just is -> Right is
+    Nothing -> Left $ "You must choose an index."
 
 -- | Parser for "add" command
 addPs :: (MethodSet m) => m -> Parser (AddConf m)
@@ -105,37 +106,18 @@ addPs (m :: m) = AddConf
              <> short 'm'
              <> metavar "STR"
              <> help "Set an archive message")
+  <*> option 
+        (readm Text.pack)
+        (fold [value Nothing
+              ,short 'i'
+              ,long "index"
+              ,metavar "NAME"])
   where hmethod = "use GETTER to fetch the target (" ++ (show names) ++ ")"
         hURI = "the location or filepath of the target"
         hnoprompt = "fetch and store target without asking for a synopsis \
                     \or new filename (a \"to be refiled\" temp. synopsis \
                     \will be used)"
         names = Map.keys (Map.mapKeys Text.unpack (namesMap :: Map Text (Method m)))
-
-data BrowseConf = BrowseConf 
-  { browseURI :: Maybe Text
-  , browseAPI :: Maybe Text
-  , browseGateway :: Maybe Text
-  , browseOutpath :: Maybe FilePath }
-  deriving (Eq,Ord)
-
-browsePs :: Parser BrowseConf
-browsePs = BrowseConf
-  <$> mtext (long "git-uri" 
-             <> metavar "URI" 
-             <> help "Clonable git repo of remote index")
-  <*> mtext (long "api" 
-             <> metavar "API" 
-             <> help "Custom IPFS API to use")
-  <*> mtext (long "gateway"
-             <> short 'g'
-             <> metavar "URI"
-             <> help "IPFS gateway to use in directory links")
-  <*> (fmap fromText 
-       <$> mtext (short 'o'
-                  <> metavar "PATH"
-                  <> help "Write the directory to file instead \
-                          \of opening in $EDITOR"))
 
 
 mtext :: Mod OptionFields Text -> Parser (Maybe Text)
@@ -147,8 +129,20 @@ e2s f s = case f (Text.pack s) of
             Right a -> Right a
             Left t -> Left (Text.unpack t)
 
-rmPs :: Parser IpfsPath
-rmPs = argument (eitherReader (e2s mkIpfsPath)) (metavar "PATH")
+data RmConf = RmConf
+  { rmTarget :: IpfsPath
+  , rmIndexChoice :: Maybe Text }
+  deriving (Eq,Ord)
+
+rmPs :: Parser RmConf
+rmPs = RmConf 
+  <$> argument (eitherReader (e2s mkIpfsPath)) (metavar "PATH")
+  <*> option 
+        (readm Text.pack)
+        (fold [value Nothing
+              ,short 'i'
+              ,long "index"
+              ,metavar "NAME"])
 
 readm :: (String -> a) -> ReadM (Maybe a)
 readm f = maybeReader (Just . Just . f)
@@ -156,40 +150,44 @@ readm f = maybeReader (Just . Just . f)
 ccPs :: (MethodSet m) => m -> Parser (ConfigCLI m)
 ccPs (m :: m) = ConfigCLI
   <$> option 
-        (readm (fromText . Text.pack)) 
+        (readm (id)) 
         (fold [value Nothing
               ,short 'c'
               ,long "config"
               ,metavar "PATH"])
-  <*> option 
-        (readm Text.pack)
-        (fold [value Nothing
-              ,short 'i'
-              ,long "index"
-              ,metavar "NAME"])
-  <*> (Behavior <$> switch (short 'x' 
-                            <> long "no-sync" 
-                            <> help "Do not automatically pull or push the index"))
   <*> subparser (fold (map ($m) cmds))
 
-completeConfig :: (MethodSet m) => ConfigCLI m -> IO (IndexConfig,Behavior)
-completeConfig (ConfigCLI mf mt beh comm) = do
-  indexes <- case mf of
-    Just f -> readConfFile f
-    Nothing -> do
-      mf <- need "OCTAR_CONFIG"
-      case mf of
-        Just f -> readConfFile (fromText f)
-        Nothing -> home >>= (\h -> readConfFile (h <> fromText ".octar"))
-  case selectIndex mt indexes of
-    Right i -> return (i,beh)
-    Left e -> die e
-  where readConfFile f = do 
-          r <- decodeFileEither (Text.unpack (format fp f))
-          case r of
-            Right c -> return c
-            Left e -> do print e
-                         die "Couldn't read config file."
+systemOctarConf :: IO (Maybe FilePath)
+systemOctarConf = do
+  let p = "/etc/octar"
+  testfile (fromText p) >>= \case
+    True -> return.Just $ Text.unpack p
+    False -> return Nothing
+
+localOctarConf :: IO (Maybe String)
+localOctarConf = do
+  p <- format fp . (<> fromText ".octar") <$> home
+  testfile (fromText p) >>= \case
+    True -> return.Just $ Text.unpack p
+    False -> return Nothing
+
+chooseConfigFile :: (MethodSet m) => ConfigCLI m -> IO FilePath
+chooseConfigFile ccli = case configConfFile ccli of
+  Just fp -> return fp
+  Nothing -> need "OCTAR_CONFIG" >>= \case
+    Just t -> return $ Text.unpack t
+    Nothing -> localOctarConf >>= \case
+      Just p -> return p
+      Nothing -> systemOctarConf >>= \case
+        Just p -> return p
+        Nothing -> die "Could not find any index configuration file."
+
+loadConfigFile :: (MethodSet m) => ConfigCLI m -> IO MultiConfig
+loadConfigFile ccli = do
+  emc <- loadMultiConfig =<< chooseConfigFile ccli
+  case emc of
+    Right mc -> return mc
+    Left e -> die (Text.pack e)
 
 getConfigCLI :: (MethodSet m) => m -> Text -> IO (ConfigCLI m)
 getConfigCLI (m :: m) version = 

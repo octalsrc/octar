@@ -1,18 +1,15 @@
 module Octar 
-  ( module Octar.Index
-  , module Octar.Index.Frontend
-  , module Octar.Entry
+  ( module Octar.Entry
+  , module Octar.Index2
   , module Octar.Method
   , module Octar.Method.Common
   , module Octar.Metadata
-  , decodeFileEither
+  , module Octar.Config
   ) where
 
-import Data.Yaml (decodeFileEither)
-
-import Octar.Index
-import Octar.Index.Frontend
 import Octar.Entry
+import Octar.Index2
 import Octar.Method
 import Octar.Method.Common
 import Octar.Metadata
+import Octar.Config
