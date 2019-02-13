@@ -20,15 +20,19 @@ import qualified Data.Text as Text
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Control.Lens
+import Data.Maybe
+import Control.Concurrent.STM
+import Control.Concurrent (forkIO)
+import System.Posix.Signals
 
 import Octar
+import Octar.Discard
 import Turtle.Ipfs
 import Turtle.Git (sOrDie)
 import qualified Turtle.Git as Git
 import Octar.CLI.Opts
 
 import Network.Discard
-import qualified Data.EventGraph
 import Lang.Carol hiding (Add)
 
 version = "0.4.0"
@@ -89,30 +93,47 @@ mkOctarCLI version methodset = orDie $ do
         let script i man = do
               await
               runCarolR man $ issue (ef$ RGAppend ref)
-        case i^.indexPersist of
-          Just sfile -> runNodeFile 
-                          (i^.indexNodeId) 
-                          (s^.storageApiPort) 
-                          (i^.indexNetwork)
-                          sfile
-                          settings
-                          script
-          Nothing -> runNode 
-                       (i^.indexNodeId) 
-                       (s^.storageApiPort) 
-                       (i^.indexNetwork)
-                       mempty
-                       Data.EventGraph.empty
-                       settings
-                       script 
-                     >> return ()
+
+        runIndexNode (i,s) settings script
         return (Right ())
 
       Left e -> die (Text.pack e)
 
     Rm c -> return (Right ())
 
-    Mirror c -> return (Right ())
+    -- The mirror serves /all/ indexes at the same time, with a
+    -- separate discard node for each
+    Mirror c -> do endv <- newTVarIO False
+                   installHandler 
+                     keyboardSignal 
+                     (Catch $ atomically (swapTVar endv True) >> return ()) 
+                     Nothing
+                   tvs <- mapM (launchNode endv) iss
+                   waitForExits tvs
+                   return (Right ())
+
+      where iss :: [(IndexConfig,StorageConfig)]
+            iss = map (\iname -> fromJust $ mc^.indexWithStorage (indexes.at iname)) 
+                      (Map.keys (mc^.indexes))
+
+            launchNode :: TVar Bool -> (IndexConfig,StorageConfig) -> IO (TVar Bool)
+            launchNode endv (i,s) = do
+              -- The script just waits until the end-signal is true
+              nV <- newTVarIO False
+              let script _ _ = atomically $ check =<< readTVar endv
+              -- The new thread runs the discard node (which exits
+              -- when endv goes to true) and then announces its exit
+              -- by setting its thread-specific nV to true
+              forkIO $ do runIndexNode (i,s) defaultDManagerSettings script
+                          atomically $ swapTVar nV True
+                          return ()
+              return nV
+
+            -- This should just stop until all launched nodes have
+            -- signalled their exits.  The launched nodes should wait
+            -- on the Ctrl-C signal and then shut down?
+            waitForExits :: [TVar Bool] -> IO ()
+            waitForExits = atomically . mapM_ (\tv -> check =<< readTVar tv)
 
     -- Add c -> do 
     --   withIndex indxc $ \indx -> do
