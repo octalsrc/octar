@@ -88,11 +88,14 @@ mkOctarCLI version methodset = orDie $ do
         ref <- withApiM (Text.pack <$> s^.storageApi) (storeEntry md efr) >>= \case
           Right ent -> return . fst . entryPair $ ent
           Left e -> die e
+        putStrLn "Done."
 
         (settings,await) <- awaitNetwork defaultDManagerSettings (Just 1000000)
         let script i man = do
               await
               runCarolR man $ issue (ef$ RGAppend ref)
+              RGArray es <- runCarolR man $ query crT
+              mapM_ print es
 
         runIndexNode (i,s) settings script
         return (Right ())

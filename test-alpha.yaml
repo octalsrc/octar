@@ -1,0 +1,41 @@
+main-index: saturn
+
+indexes:
+  jupiter:
+    storage: ipfs
+    node-id: alpha
+    network:
+      - name: alpha
+        port: 23001
+
+      - name: beta
+        port: 23002
+
+      - name: delta
+        port: 23003
+    archivist: alice
+
+  saturn:
+    storage: alt
+    node-id: alpha
+    network: 
+      - name: alpha
+        port: 23011
+
+      - name: beta
+        port: 23012
+
+      - name: delta
+        port: 23013
+    archivist: bob
+
+storages:
+
+  ipfs:
+    api: /ip4/127.0.0.1/tcp/5001
+    api-port: 5001
+    gateway: https://gateway.ipfs.io
+
+  alt:
+    api: /ip4/127.0.0.1/tcp/9251
+    api-port: 9251
