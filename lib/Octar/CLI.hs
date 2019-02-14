@@ -35,6 +35,10 @@ import Octar.CLI.Opts
 import Network.Discard
 import Lang.Carol hiding (Add)
 
+import Network.Wai
+import Network.HTTP.Types (status200)
+import qualified Network.Wai.Handler.Warp as Warp (run)
+
 version = "0.4.0"
 
 refileSynopsis = "(To be refiled)"
@@ -112,6 +116,9 @@ mkOctarCLI version methodset = orDie $ do
                      (Catch $ atomically (swapTVar endv True) >> return ()) 
                      Nothing
                    tvs <- mapM (launchNode endv) iss
+                   let server _ respond = respond $
+                         responseLBS status200 [("Content-Type", "text/plain")] "Hello World"
+                   forkIO $ Warp.run 3000 server
                    waitForExits tvs
                    return (Right ())
 

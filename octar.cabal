@@ -55,6 +55,10 @@ library
     mtl                  >= 2.2.2 && < 2.3,
     stm,
     unix,
+    wai,
+    warp,
+    http-types,
+    http-client,
     parsec               >= 3.1.13 && < 3.2
   hs-source-dirs:      lib
   default-language: Haskell2010
