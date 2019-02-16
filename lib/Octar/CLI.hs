@@ -108,7 +108,19 @@ mkOctarCLI version methodset = orDie $ do
 
       Left e -> die (Text.pack e)
 
-    Rm c -> return (Right ())
+    Rm c -> case chooseIndexRm mc c of
+      Right (i,s) -> do
+        (settings,await) <- awaitNetwork defaultDManagerSettings (Just 1000000)
+        let ref = rmTarget c
+            script i man = do
+              await
+              RGArray ps <- runCarolR man $ query crT
+              if ref `elem` ps
+                 then runCarolR man $ issue (ef$ RGRemove ref)
+                 else die "That ref isn't in the index."
+        runIndexNode (i,s) settings script
+        return (Right ())
+      Left e -> die (Text.pack e)
 
     -- The mirror serves /all/ indexes at the same time, with a
     -- separate discard node for each

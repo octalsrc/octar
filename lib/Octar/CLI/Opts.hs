@@ -7,6 +7,7 @@ module Octar.CLI.Opts
   , Command (..)
   , AddConf (..)
   , chooseIndex
+  , chooseIndexRm
   , RmConf (..)
   , MirrorConf (..)
   , getConfigCLI
@@ -79,6 +80,15 @@ data AddConf m = AddConf
 
 chooseIndex :: MultiConfig -> AddConf m -> Either String (IndexConfig, StorageConfig)
 chooseIndex mc ac = case Text.unpack <$> addIndexChoice ac of
+  Just iname -> case mc^.indexWithStorage (indexes.at iname) of
+    Just is -> Right is
+    Nothing -> Left $ "Index \"" <> iname <> "\" is not configured."
+  Nothing -> case mc^.indexWithStorage defaultIndex of
+    Just is -> Right is
+    Nothing -> Left $ "You must choose an index."
+
+chooseIndexRm :: MultiConfig -> RmConf -> Either String (IndexConfig, StorageConfig)
+chooseIndexRm mc rc = case Text.unpack <$> rmIndexChoice rc of
   Just iname -> case mc^.indexWithStorage (indexes.at iname) of
     Just is -> Right is
     Nothing -> Left $ "Index \"" <> iname <> "\" is not configured."
