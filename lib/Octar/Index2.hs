@@ -36,8 +36,10 @@ refreshIndex live = do
   return (live { liveMetaCache = mc' }, new, rmd)
 
 -- | Initialize an index from a discard node
-loadIndex :: ManagerConn c i (RGArray IpfsPath)
-loadIndex = undefined
+loadIndex :: ManagerConn c i (RGArray IpfsPath) -> IpfsME (LiveIndex c i)
+loadIndex man = do
+  (mc',_,_) <- updateMC mempty =<< (l2 $ runCarolR man (query crT))
+  return $ LiveIndex man mc'
 
 addToIndex :: LiveIndex c i -> Entry -> IO (LiveIndex c i)
 addToIndex live e = do

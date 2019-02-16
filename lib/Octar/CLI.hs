@@ -31,12 +31,14 @@ import Turtle.Ipfs
 import Turtle.Git (sOrDie)
 import qualified Turtle.Git as Git
 import Octar.CLI.Opts
+import Octar.Index.Frontend.StaticWeb
+import Octar.Index (MetaCache)
 
 import Network.Discard
 import Lang.Carol hiding (Add)
 
 import Network.Wai
-import Network.HTTP.Types (status200)
+import Network.HTTP.Types (status200,status404)
 import qualified Network.Wai.Handler.Warp as Warp (run)
 
 version = "0.4.0"
@@ -116,28 +118,57 @@ mkOctarCLI version methodset = orDie $ do
                      (Catch $ atomically (swapTVar endv True) >> return ()) 
                      Nothing
                    tvs <- mapM (launchNode endv) iss
-                   let server _ respond = respond $
-                         responseLBS status200 [("Content-Type", "text/plain")] "Hello World"
+                   let mcMap = Map.fromList (map snd tvs) :: Map String (StorageConfig, TVar MetaCache)
+                       server req resp = case pathInfo req of
+                         [iname] -> case Map.lookup (Text.unpack iname) mcMap of
+                           Just (s,mcv) -> do 
+                             mc <- readTVarIO mcv
+                             let gw = case s^.storageGateway of
+                                        Just gw -> gw
+                                        Nothing -> "https://gateway.ipfs.io/ipfs"
+                             resp $ responseLBS 
+                                      status200 
+                                      [("Content-Type", "text/html")]
+                                      (indexWebpage' gw mc)
+                           Nothing -> resp $ responseLBS 
+                                               status404 
+                                               [("Content-Type","text/plain")]
+                                               "No index by that name exists."
+                         _ -> resp $ responseLBS 
+                                       status404 
+                                       [("Content-Type","text/plain")]
+                                       "Try an index."
                    forkIO $ Warp.run 3000 server
-                   waitForExits tvs
+                   waitForExits (map fst tvs)
                    return (Right ())
 
-      where iss :: [(IndexConfig,StorageConfig)]
-            iss = map (\iname -> fromJust $ mc^.indexWithStorage (indexes.at iname)) 
+      where iss :: [(String,(IndexConfig,StorageConfig))]
+            iss = map (\iname -> (iname, fromJust $ mc^.indexWithStorage (indexes.at iname))) 
                       (Map.keys (mc^.indexes))
 
-            launchNode :: TVar Bool -> (IndexConfig,StorageConfig) -> IO (TVar Bool)
-            launchNode endv (i,s) = do
+            launchNode :: TVar Bool 
+                       -> (String, (IndexConfig, StorageConfig))
+                       -> IO (TVar Bool, (String, (StorageConfig, TVar MetaCache)))
+            launchNode endv (iname,(i,s)) = do
               -- The script just waits until the end-signal is true
               nV <- newTVarIO False
-              let script _ _ = atomically $ check =<< readTVar endv
+              mcV <- newTVarIO mempty
+              let script _ man = do onUp =<< runCarolR man (query crT)
+                                    atomically $ check =<< readTVar endv
+                  api = fmap pack (s^.storageApi)
+                  onUp s = do 
+                    mc <- readTVarIO mcV
+                    Right (mc',_,_) <- withApiM api (updateMC mc s)
+                    atomically $ swapTVar mcV mc'
+                    return ()
+                  settings = defaultDManagerSettings { onStoreUpdate = onUp.fst }
               -- The new thread runs the discard node (which exits
               -- when endv goes to true) and then announces its exit
               -- by setting its thread-specific nV to true
-              forkIO $ do runIndexNode (i,s) defaultDManagerSettings script
+              forkIO $ do runIndexNode (i,s) settings script
                           atomically $ swapTVar nV True
                           return ()
-              return nV
+              return (nV,(iname, (s,mcV)))
 
             -- This should just stop until all launched nodes have
             -- signalled their exits.  The launched nodes should wait
