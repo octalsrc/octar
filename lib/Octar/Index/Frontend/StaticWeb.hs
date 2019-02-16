@@ -1,9 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Octar.Index.Frontend.StaticWeb
-  (indexWebpage
-  ,indexWebpage'
-  
+  ( indexWebpage
+  , indexWebpage'
+  , mainPage
+
   ) where
 
 import Octar.Index (MetaCache)
@@ -21,10 +22,16 @@ indexWebpage :: String -- ^ Storage gateway path
              -> MetaCache -- ^ Index metacache
              -> Html ()
 indexWebpage gw mc = 
+  mkPage (ul_ $ mconcat (map (entry gw) (Map.assocs mc)))
+
+mainPage :: [String] -> ByteString
+mainPage ss = renderBS (ul_ $ mconcat (map (\p -> li_ (a_ [href_ (Text.pack p)] (toHtml p))) ss))
+
+mkPage :: Html () -> Html ()
+mkPage b = 
   html_ $ 
     (head_ (meta_ [charset_ "utf-8"])
-     <> body_ (ul_ $ mconcat (map (entry gw) (Map.assocs mc))))
-
+     <> body_ b)
 
 indexWebpage' :: String -- ^ Storage gateway path
               -> MetaCache -- ^ Index metacache

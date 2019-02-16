@@ -134,6 +134,10 @@ mkOctarCLI version methodset = orDie $ do
                                                status404 
                                                [("Content-Type","text/plain")]
                                                "No index by that name exists."
+                         [] -> resp $ responseLBS 
+                                        status200 
+                                        [("Content-Type","text/html")]
+                                        (mainPage (Map.keys (mc^.indexes)))
                          _ -> resp $ responseLBS 
                                        status404 
                                        [("Content-Type","text/plain")]
