@@ -1,9 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Octar.Index2 where
 
 import Control.Monad
-import Network.Discard
 import Lang.Carol
 import qualified Octar.Index as Index1
 import Octar.Entry
@@ -12,11 +12,13 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Data.List as List
 
-data LiveIndex c i = LiveIndex
-  { liveConn :: ManagerConn c i (RGArray IpfsPath)
+type Index = RGArray IpfsPath
+
+data LiveIndex c = LiveIndex
+  { liveCC :: c
   , liveMetaCache :: Index1.MetaCache }
 
-updateMC :: Index1.MetaCache -> RGArray IpfsPath -> IpfsME (Index1.MetaCache, [IpfsPath], [IpfsPath])
+updateMC :: Index1.MetaCache -> Index -> IpfsME (Index1.MetaCache, [IpfsPath], [IpfsPath])
 updateMC mc (RGArray paths) = do
   let rmd = Map.keys mc List.\\ paths
       new = paths List.\\ Map.keys mc
@@ -29,27 +31,27 @@ updateMC mc (RGArray paths) = do
 
 -- | Load entries from the backing store into the metacache, returning
 -- a list of new entries found and a list of entries removed
-refreshIndex :: LiveIndex c i -> IpfsME (LiveIndex c i, [IpfsPath], [IpfsPath])
+refreshIndex :: (CCarrier c Index IO) => LiveIndex c -> IpfsME (LiveIndex c, [IpfsPath], [IpfsPath])
 refreshIndex live = do
   (mc', new, rmd) <- updateMC (liveMetaCache live) 
-                     =<< (l2 $ runCarolR (liveConn live) (query crT))
+                     =<< (l2 $ carol (liveCC live) queryT)
   return (live { liveMetaCache = mc' }, new, rmd)
 
 -- | Initialize an index from a discard node
-loadIndex :: ManagerConn c i (RGArray IpfsPath) -> IpfsME (LiveIndex c i)
-loadIndex man = do
-  (mc',_,_) <- updateMC mempty =<< (l2 $ runCarolR man (query crT))
-  return $ LiveIndex man mc'
+loadIndex :: (CCarrier c Index IO) => c -> IpfsME (LiveIndex c)
+loadIndex cc = do
+  (mc',_,_) <- updateMC mempty =<< (l2 $ carol cc queryT)
+  return $ LiveIndex cc mc'
 
-addToIndex :: LiveIndex c i -> Entry -> IO (LiveIndex c i)
+addToIndex :: (CCarrier c Index IO) => LiveIndex c -> Entry -> IO (LiveIndex c)
 addToIndex live e = do
   let (p,m) = entryPair e
-  runCarolR (liveConn live) (issue.ef $ RGAppend p)
+  carol (liveCC live) $ issue (ef$ RGAppend p)
   return $ live { liveMetaCache = Map.insert p m (liveMetaCache live)}
 
-rmFromIndex :: LiveIndex c i -> IpfsPath -> IO (LiveIndex c i)
+rmFromIndex :: (CCarrier c Index IO) => LiveIndex c -> IpfsPath -> IO (LiveIndex c)
 rmFromIndex live p =
   if Map.member p (liveMetaCache live)
-     then do runCarolR (liveConn live) (issue.ef $ RGRemove p)
+     then do carol (liveCC live) $ issue (ef$ RGRemove p)
              return live { liveMetaCache = Map.delete p (liveMetaCache live) }
      else return live

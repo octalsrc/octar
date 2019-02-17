@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Octar.CLI 
   ( octarStock
@@ -34,7 +35,7 @@ import Octar.CLI.Opts
 import Octar.Index.Frontend.StaticWeb
 import Octar.Index (MetaCache)
 
-import Network.Discard
+import Network.Discard (defaultDManagerSettings, onValUpdate)
 import Lang.Carol hiding (Add)
 
 import Network.Wai
@@ -96,29 +97,23 @@ mkOctarCLI version methodset = orDie $ do
           Left e -> die e
         putStrLn "Done."
 
-        (settings,await) <- awaitNetwork defaultDManagerSettings (Just 1000000)
-        let script i man = do
-              await
-              runCarolR man $ issue (ef$ RGAppend ref)
-              RGArray es <- runCarolR man $ query crT
-              mapM_ print es
-
-        runIndexNode (i,s) settings script
+        runIndexNodeAwait (i,s) $ \_ cc -> do
+          carol cc $ issue (ef$ RGAppend ref)
+          RGArray es <- carol cc queryT :: IO (RGArray IpfsPath)
+          mapM_ print es
         return (Right ())
 
       Left e -> die (Text.pack e)
 
     Rm c -> case chooseIndexRm mc c of
       Right (i,s) -> do
-        (settings,await) <- awaitNetwork defaultDManagerSettings (Just 1000000)
         let ref = rmTarget c
             script i man = do
-              await
-              RGArray ps <- runCarolR man $ query crT
+              RGArray ps <- carol man queryT
               if ref `elem` ps
-                 then runCarolR man $ issue (ef$ RGRemove ref)
+                 then carol man $ issue (ef$ RGRemove ref)
                  else die "That ref isn't in the index."
-        runIndexNode (i,s) settings script
+        runIndexNodeAwait (i,s) script
         return (Right ())
       Left e -> die (Text.pack e)
 
@@ -169,7 +164,7 @@ mkOctarCLI version methodset = orDie $ do
               -- The script just waits until the end-signal is true
               nV <- newTVarIO False
               mcV <- newTVarIO mempty
-              let script _ man = do onUp =<< runCarolR man (query crT)
+              let script _ man = do onUp =<< carol man queryT
                                     atomically $ check =<< readTVar endv
                   api = fmap pack (s^.storageApi)
                   onUp s = do 
@@ -177,11 +172,11 @@ mkOctarCLI version methodset = orDie $ do
                     Right (mc',_,_) <- withApiM api (updateMC mc s)
                     atomically $ swapTVar mcV mc'
                     return ()
-                  settings = defaultDManagerSettings { onStoreUpdate = onUp.fst }
+                  settings = defaultDManagerSettings { onValUpdate = onUp }
               -- The new thread runs the discard node (which exits
               -- when endv goes to true) and then announces its exit
               -- by setting its thread-specific nV to true
-              forkIO $ do runIndexNode (i,s) settings script
+              forkIO $ do runIndexNode' (i,s) settings script
                           atomically $ swapTVar nV True
                           return ()
               return (nV,(iname, (s,mcV)))
