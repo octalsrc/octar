@@ -22,8 +22,9 @@ module Octar.Config
   , indexArchivist
 
   , StorageConfig
-  , storageApi
   , storageApiPort
+  , storageApiMultiAddr
+  , storageApiHttp
   , storageGateway
   
   ) where
@@ -38,16 +39,26 @@ import Data.ByteString
 import Data.Maybe (fromJust)
 
 data StorageConfig = StorageConfig 
-  { _storageApi :: Maybe String
-  , _storageApiPort :: Int
+  { _storageApiPort :: Int
   , _storageGateway :: Maybe String }
 
 makeLenses ''StorageConfig
 
+-- | Use the configured storage API port to make a localhost
+-- "multiaddress", suitable for an IPFS CLI client interface
+storageApiMultiAddr :: Getter StorageConfig String
+storageApiMultiAddr = to $ \conf -> 
+  "/ip4/127.0.0.1/tcp/" <> show (conf^.storageApiPort)
+
+-- | Use the configured storage API port to make a localhost URI,
+-- suitable for an IPFS HTTP client interface
+storageApiHttp :: Getter StorageConfig String
+storageApiHttp = to $ \conf ->
+  "http://localhost:" <> show (conf^.storageApiPort)
+
 instance FromJSON StorageConfig where
   parseJSON = withObject "StorageConfig" $ \v -> StorageConfig
-    <$> v .:? "api"
-    <*> v .: "api-port"
+    <$> v .: "api-port"
     <*> v .:? "gateway"
 
 data IndexConfig = IndexConfig

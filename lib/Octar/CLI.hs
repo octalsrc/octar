@@ -92,7 +92,7 @@ mkOctarCLI version methodset = orDie $ do
            then die "Dry run, not writing to index."
            else return ()
         putStr "Storing entry...  " >> IO.hFlush IO.stdout
-        ref <- withApiM (Text.pack <$> s^.storageApi) (storeEntry md efr) >>= \case
+        ref <- withApi' (Text.pack $ s^.storageApiMultiAddr) (storeEntry md efr) >>= \case
           Right ent -> return . fst . entryPair $ ent
           Left e -> die e
         putStrLn "Done."
@@ -166,10 +166,10 @@ mkOctarCLI version methodset = orDie $ do
               mcV <- newTVarIO mempty
               let script _ man = do onUp =<< carol man queryT
                                     atomically $ check =<< readTVar endv
-                  api = fmap pack (s^.storageApi)
+                  api = pack (s^.storageApiMultiAddr)
                   onUp s = do 
                     mc <- readTVarIO mcV
-                    Right (mc',_,_) <- withApiM api (updateMC mc s)
+                    Right (mc',_,_) <- withApi' api (updateMC mc s)
                     atomically $ swapTVar mcV mc'
                     return ()
                   settings = defaultDManagerSettings { onValUpdate = onUp }

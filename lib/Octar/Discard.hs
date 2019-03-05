@@ -34,14 +34,14 @@ runIndexNode' :: (IndexConfig, StorageConfig)
 runIndexNode' (i,s) settings script = case i^.indexPersist of
   Just sfile -> runNodeFile 
                   (i^.indexNodeId) 
-                  (s^.storageApiPort) 
+                  (s^.storageApiHttp) 
                   (i^.indexNetwork) 
                   sfile 
                   settings 
                   script
   Nothing -> runNode
                (i^.indexNodeId) 
-               (s^.storageApiPort) 
+               (s^.storageApiHttp) 
                (i^.indexNetwork)
                settings
                script 

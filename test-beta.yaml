@@ -32,10 +32,8 @@ indexes:
 storages:
 
   ipfs:
-    api: /ip4/127.0.0.1/tcp/5001
     api-port: 5001
     gateway: https://gateway.ipfs.io
 
   alt:
-    api: /ip4/127.0.0.1/tcp/9251
     api-port: 9251
