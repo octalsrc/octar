@@ -14,6 +14,9 @@ module Octar.Config
   , storageFor
   , storageFor'
   , indexWithStorage
+  , indexNames
+  , storageNames
+  , indexesUsingStorage
 
   , IndexConfig
   , indexNetwork
@@ -35,7 +38,7 @@ import qualified Data.Map as Map
 import Data.Yaml
 import Network.Discard (NetConf)
 import Control.Lens
-import Data.ByteString
+import Data.ByteString (ByteString)
 import Data.Maybe (fromJust)
 
 data StorageConfig = StorageConfig 
@@ -138,3 +141,18 @@ indexWithStorage :: Getter MultiConfig (Maybe IndexConfig)
 indexWithStorage g = to $ \conf -> case (conf^.g, conf^.storageFor g) of
                                      (Just i, Just s) -> Just (i,s)
                                      _ -> Nothing
+
+indexNames :: Getter MultiConfig [String]
+indexNames = to $ \conf -> Map.keys (conf^.indexes)
+
+storageNames :: Getter MultiConfig [String]
+storageNames = to $ \conf -> Map.keys (conf^.storages)
+
+indexesUsingStorage :: String -> Getter MultiConfig (Maybe [String])
+indexesUsingStorage sname = to $ \conf -> case sname `elem` (conf^.storageNames) of
+  True -> Just 
+          . map fst 
+          . filter (\(_,i) -> (i^.indexStorageName) == sname)
+          . Map.assocs
+          $ conf^.indexes
+  False -> Nothing

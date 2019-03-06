@@ -5,6 +5,7 @@ module Octar
   , module Octar.Method.Common
   , module Octar.Metadata
   , module Octar.Config
+  , module Octar.Live
   ) where
 
 import Octar.Entry
@@ -13,3 +14,4 @@ import Octar.Method
 import Octar.Method.Common
 import Octar.Metadata
 import Octar.Config
+import Octar.Live
