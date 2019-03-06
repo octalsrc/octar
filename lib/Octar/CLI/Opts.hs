@@ -65,9 +65,21 @@ data Command m =
   | Mirror MirrorConf
   deriving (Eq,Ord)
 
-data MirrorConf = MirrorConf deriving (Eq,Ord)
+data MirrorConf = MirrorConf 
+  { mirrorIndexPort :: Maybe Int
+  , mirrorGatewayPort :: Maybe Int } 
+  deriving (Eq,Ord)
 
-mirrorPs = pure MirrorConf
+mirrorPs :: Parser MirrorConf
+mirrorPs = MirrorConf 
+  <$> option (readm read) 
+             (value Nothing
+              <> long "index"
+              <> metavar "PORT")
+  <*> option (readm read)
+             (value Nothing
+              <> long "gateway"
+              <> metavar "PORT")
 
 data AddConf m = AddConf
   { addTarget :: Text

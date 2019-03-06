@@ -1,0 +1,30 @@
+main-index: saturn
+
+indexes:
+
+  jupiter:
+    storage: ipfs
+    node-id: client
+    network:
+      - name: client
+        port: 23999
+      - name: alpha
+        port: 23001
+    archivist: octalsrc
+
+  saturn:
+    storage: alt
+    node-id: client
+    network:
+      - name: client
+        port: 23998
+      - name: beta
+        port: 23011
+    archivist: octalsrc
+
+storages:
+
+  ipfs:
+    api-port: 5001
+  alt:
+    api-port: 9251

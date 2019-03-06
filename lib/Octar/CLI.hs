@@ -28,6 +28,7 @@ import System.Posix.Signals
 
 import Octar
 import Octar.Discard
+import Octar.Gateway
 import Turtle.Ipfs
 import Turtle.Git (sOrDie)
 import qualified Turtle.Git as Git
@@ -119,7 +120,11 @@ mkOctarCLI version methodset = orDie $ do
 
     -- The mirror serves /all/ indexes at the same time, with a
     -- separate discard node for each
-    Mirror c -> do endv <- newTVarIO False
+    Mirror c -> do serverInfo <- case (mirrorIndexPort c, mirrorGatewayPort c) of
+                     (Just ip, Just gp) -> return $ Just (ip,gp)
+                     (Nothing,Nothing) -> return $ Nothing
+                     _ -> die "Must have both index and gateway, or neither."
+                   endv <- newTVarIO False
                    installHandler 
                      keyboardSignal 
                      (Catch $ atomically (swapTVar endv True) >> return ()) 
@@ -130,9 +135,10 @@ mkOctarCLI version methodset = orDie $ do
                          [iname] -> case Map.lookup (Text.unpack iname) mcMap of
                            Just (s,mcv) -> do 
                              mc <- readTVarIO mcv
-                             let gw = case s^.storageGateway of
-                                        Just gw -> gw
-                                        Nothing -> "https://gateway.ipfs.io/ipfs"
+                             let gw = "http://localhost:" 
+                                      <> (case serverInfo of
+                                            Just (_,gp) -> show gp)
+                                      <> "/" <> Text.unpack iname
                              resp $ responseLBS 
                                       status200 
                                       [("Content-Type", "text/html")]
@@ -149,7 +155,11 @@ mkOctarCLI version methodset = orDie $ do
                                        status404 
                                        [("Content-Type","text/plain")]
                                        "Try an index."
-                   forkIO $ Warp.run 3000 server
+                   case serverInfo of
+                     Just (ip,gp) -> do forkIO $ octarGateway gp mcMap
+                                        forkIO $ Warp.run ip server
+                                        return ()
+                     Nothing -> return ()
                    waitForExits (map fst tvs)
                    return (Right ())
 
@@ -169,6 +179,7 @@ mkOctarCLI version methodset = orDie $ do
                   api = pack (s^.storageApiMultiAddr)
                   onUp s = do 
                     mc <- readTVarIO mcV
+                    print api
                     Right (mc',_,_) <- withApi' api (updateMC mc s)
                     atomically $ swapTVar mcV mc'
                     return ()
