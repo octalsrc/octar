@@ -30,13 +30,13 @@ makeLenses ''MultiLive
 initMultiLive :: MultiConfig -> MultiLive
 initMultiLive mc = MultiLive mc mempty
 
-buildLive :: (String -> MultiConfig -> IO (TVar MetaCache)) 
+buildLive :: (String -> MultiConfig -> IO (TVar MetaCache, a)) 
           -> MultiConfig 
-          -> IO MultiLive
-buildLive f mc = foldM (\ml iname -> do tv <- f iname mc :: IO (TVar MetaCache)
-                                        return (ml & liveCache . at iname ?~ tv))
-                       (initMultiLive mc :: MultiLive) 
-                       (mc^.indexNames :: [String])
+          -> IO (MultiLive, [a])
+buildLive f mc = foldM (\(ml,rs) iname -> do (tv,r) <- f iname mc
+                                             return (ml & liveCache . at iname ?~ tv, r:rs))
+                       (initMultiLive mc, []) 
+                       (mc^.indexNames)
 
 indexRefs :: String -> MultiLive -> Maybe (IO [IpfsPath])
 indexRefs iname ml = (\tv -> M.keys <$> readTVarIO tv) <$> (ml^.liveCache.at iname)

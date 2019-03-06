@@ -77,7 +77,7 @@ octarCLI' vs = mkOctarCLI (vs <> " (using base octar v" <> version <> ")")
 mkOctarCLI :: (MethodSet m) => Text -> m -> IO ()
 mkOctarCLI version methodset = orDie $ do
   conf <- getConfigCLI methodset version
-  mc <- loadConfigFile conf
+  mc <- loadConfigFile conf :: IO MultiConfig
   case configCommand conf of
   
     Add c -> case chooseIndex mc c of
@@ -129,20 +129,23 @@ mkOctarCLI version methodset = orDie $ do
                      keyboardSignal 
                      (Catch $ atomically (swapTVar endv True) >> return ()) 
                      Nothing
+                   (ml,endedVs) <- buildLive (launchNode' endv) mc
+                   undefined
+
                    tvs <- mapM (launchNode endv) iss
-                   let mcMap = Map.fromList (map snd tvs) :: Map String (StorageConfig, TVar MetaCache)
-                       server req resp = case pathInfo req of
-                         [iname] -> case Map.lookup (Text.unpack iname) mcMap of
-                           Just (s,mcv) -> do 
-                             mc <- readTVarIO mcv
+                   let -- mcMap = Map.fromList (map snd tvs) :: Map String (StorageConfig, TVar MetaCache)
+                       server req resp = case map Text.unpack (pathInfo req) of
+                         [iname] -> case ml^.liveCache.at iname of
+                           Just mtcv -> do 
+                             mtc <- readTVarIO mtcv
                              let gw = "http://localhost:" 
                                       <> (case serverInfo of
                                             Just (_,gp) -> show gp)
-                                      <> "/" <> Text.unpack iname
+                                      <> "/" <> (mc^.indexes.at iname._Just.indexStorageName)
                              resp $ responseLBS 
                                       status200 
                                       [("Content-Type", "text/html")]
-                                      (indexWebpage' gw mc)
+                                      (indexWebpage' gw mtc)
                            Nothing -> resp $ responseLBS 
                                                status404 
                                                [("Content-Type","text/plain")]
@@ -156,7 +159,7 @@ mkOctarCLI version methodset = orDie $ do
                                        [("Content-Type","text/plain")]
                                        "Try an index."
                    case serverInfo of
-                     Just (ip,gp) -> do forkIO $ octarGateway gp mcMap
+                     Just (ip,gp) -> do forkIO $ octarGateway gp ml
                                         forkIO $ Warp.run ip server
                                         return ()
                      Nothing -> return ()
@@ -166,6 +169,10 @@ mkOctarCLI version methodset = orDie $ do
       where iss :: [(String,(IndexConfig,StorageConfig))]
             iss = map (\iname -> (iname, fromJust $ mc^.indexWithStorage (indexes.at iname))) 
                       (Map.keys (mc^.indexes))
+            
+            -- launchNode' :: TVar Bool -> String -> MultiConfig -> (TVar MetaCache, TVar Bool)
+            -- launchNode' endv iname mc
+
 
             launchNode :: TVar Bool 
                        -> (String, (IndexConfig, StorageConfig))
@@ -198,90 +205,25 @@ mkOctarCLI version methodset = orDie $ do
             waitForExits :: [TVar Bool] -> IO ()
             waitForExits = atomically . mapM_ (\tv -> check =<< readTVar tv)
 
-    -- Add c -> do 
-    --   withIndex indxc $ \indx -> do
-    --     ef <- l2$ mkEntryFrame
-    --     let ms = [case (addNoPrompt c, addCLIMessage c) of
-    --                 (_,Just m) -> return . mkSynopsis $ m
-    --                 (True,_) -> return . mkSynopsis $ refileSynopsis
-    --                 _ -> askSynopsisEdit
-    --              ,orDie$ fetchByConf c ef]
-    --     md <- l2$ mkMD (indexArchivistName indxc) =<< mmconcat ms
-    --     if addDry c
-    --        then die "Dry run, not writing to index."
-    --        else return ()
-    --     l2$ putStr "Storing entry...  " >> IO.hFlush IO.stdout
-    --     entry <- storeEntry md ef
-    --     l2$ writeWithDirs (addToIndex indx entry)
-    --     l2$ putStrLn "Done." >> IO.hFlush IO.stdout
-    --     isGit <- l2$ Git.isRepo (indexConfigPath indxc)
-    --     if isGit
-    --        then do l2.sOrDie$ Git.addU (indexConfigPath indxc)
-    --                l2.sOrDie$ Git.commit "Add entry" (indexConfigPath indxc)
-    --                l2$ putStrLn "Git-commited entry."
-    --        else return ()
-    --     if addDry c
-    --        then return ()
-    --        else l2$ runPush' beh indxc >> return ()
-
-    -- Rm p -> do
-    --   runPull' beh indxc
-    --   withIndex indxc $ \indx -> do
-    --     case rmFromIndex indx p of
-    --       Right indx' -> do 
-    --         l2$ writeIndex indx' >> writeWithDirs indx'
-    --         l2.sOrDie$ Git.addU (indexConfigPath indxc)
-    --         l2.sOrDie$ Git.commit "Remove entry" (indexConfigPath indxc)
-    --       Left e -> die e
-    --     l2$ runPush' beh indxc
-    --     return ()
-
-    -- Pin -> do
-    --   runPull' beh indxc
-    --   withApiM (indexConfigApi indxc) (pin =<< (l2.orDie$ loadPF (pfPath indxc)))
-
-    -- Push -> runPush indxc
-
-    -- Pull -> runPull indxc
-
-    -- Refresh -> do
-    --   runPull' beh indxc
-    --   withIndex indxc (l2 . writeWithDirs)
-
-    -- Browse (BrowseConf muri mapi mgate mpath) -> withTmpDir $ \tmp -> do
-    --   let tmpFile = tmp <> fromText "asdf.org"
-    --   mc <- case muri of
-    --           Just uri -> withGitRepo uri $ \repo -> do
-    --             let iconf = IndexConfig repo mapi [] "browser"
-    --             orDie$ withIndex iconf (return . liveMetaCache)
-    --           Nothing -> 
-    --             orDie$ withIndex indxc (return . liveMetaCache) 
-    --   let gateway = case mgate of
-    --                   Just gate -> gate
-    --                   Nothing -> "https://ipfs.io"
-    --   case mpath of
-    --     Just f -> writeOrgDir gateway f mc
-    --     Nothing -> do 
-    --       let tmpFile = tmp <> fromText "asdf.org"
-    --       writeOrgDir gateway tmpFile mc
-    --       edit tmpFile
-    --   return (Right ())
-
--- runPush' beh = 
---   if not $ behaviorNoSync beh
---      then runPush
---      else const $ return (Right ())
-
--- runPush indxc = sOrDie (Git.push (indexConfigPath indxc))
---                 >> return (Right ())
-
--- runPull' beh = 
---   if not $ behaviorNoSync beh
---      then runPull
---      else const $ return (Right ())
-
--- runPull indxc = sOrDie (Git.pull (indexConfigPath indxc))
---                 >> return (Right ())
+launchNode' :: TVar Bool -> String -> MultiConfig -> IO (TVar MetaCache, TVar Bool) 
+launchNode' endv iname mc = do
+  nV <- newTVarIO False
+  mcV <- newTVarIO mempty :: IO (TVar MetaCache)
+  let (i,s) = fromJust $ mc^.indexWithStorage (indexes.at iname)
+      script _ man = do onUp =<< carol man queryT
+                        atomically $ check =<< readTVar endv
+      api = pack (s^.storageApiMultiAddr)
+      onUp s = do 
+        mc <- readTVarIO mcV
+        print api
+        Right (mc',_,_) <- withApi' api (updateMC mc s)
+        atomically $ swapTVar mcV mc'
+        return ()
+      settings = defaultDManagerSettings { onValUpdate = onUp }
+  forkIO $ do runIndexNode' (i,s) settings script
+              atomically $ swapTVar nV True
+              return ()
+  return (mcV,nV)
 
 edit :: FilePath -> IO ()
 edit f = do

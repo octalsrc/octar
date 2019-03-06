@@ -23,6 +23,7 @@ module Octar.Config
   , indexPersist
   , indexNodeId
   , indexArchivist
+  , indexStorageName
 
   , StorageConfig
   , storageApiPort
