@@ -25,6 +25,7 @@ module Turtle.Ipfs
   , get
   , Turtle.Ipfs.cat
   , pin
+  , unpin
   , IpfsNode (..)
   , getNode
   , putNode
@@ -208,6 +209,11 @@ cat p f = ipfs ["cat",format fp fullpath] empty
 pin :: [IpfsPath] -> IpfsME ()
 pin ps = ipfs (["pin","add","--progress"] ++ map fIpfsPath ps) empty 
          >> return ()
+
+-- | Unpin a list of 'IpfsPath's
+unpin :: [IpfsPath] -> IpfsME ()
+unpin ps = ipfs (["pin","rm"] ++ map fIpfsPath ps) empty 
+           >> return ()
 
 data IpfsNode = IpfsNode
   { inodeData :: Text

@@ -21,9 +21,13 @@ import Lucid
 indexWebpage :: String -- ^ Storage gateway path
              -> String -- ^ Storage name
              -> MetaCache -- ^ Index metacache
+             -> Bool -- ^ Pin status
              -> Html ()
-indexWebpage gw stor mc = 
-  mkPage (ul_ $ mconcat (map (entry (gw <> "/" <> stor)) (Map.assocs mc)))
+indexWebpage gw stor mc pstat = 
+  mkPage $ do if pstat
+                 then p_ "Pin status: ✔"
+                 else p_ "Pin status: ❌"
+              ul_ $ mconcat (map (entry (gw <> "/" <> stor)) (Map.assocs mc))
 
 mainPage :: [String] -> ByteString
 mainPage ss = renderBS (ul_ $ mconcat (map (\p -> li_ (a_ [href_ (Text.pack p)] (toHtml p))) ss))
@@ -37,8 +41,9 @@ mkPage b =
 indexWebpage' :: String -- ^ Storage gateway path
               -> String -- ^ Storage name
               -> MetaCache -- ^ Index metacache
+              -> Bool -- ^ Pin status
               -> ByteString
-indexWebpage' gw stor mc = renderBS $ indexWebpage gw stor mc
+indexWebpage' gw stor mc ps = renderBS $ indexWebpage gw stor mc ps
 
 entry :: String -- ^ Storage gateway path
       -> (IpfsPath,Metadata)

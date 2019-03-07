@@ -37,6 +37,7 @@ import qualified Turtle.Git as Git
 import Octar.CLI.Opts
 import Octar.Index.Frontend.StaticWeb
 import Octar.Index (MetaCache)
+import Octar.Pin
 
 import Network.Discard (defaultDManagerSettings, onValUpdate)
 import Lang.Carol hiding (Add)
@@ -119,7 +120,7 @@ mkOctarCLI version methodset = orDie $ do
               RGArray ps <- carol man queryT
               if ref `elem` ps
                  then carol man $ issue (ef$ RGRemove ref)
-                 else die "That ref isn't in the index."
+                 else die "That ref is not in the index."
         runIndexNodeAwait (i,s) script
         return (Right ())
       Left e -> die (Text.pack e)
@@ -160,23 +161,39 @@ setupEndVar = do
     Nothing
   return endv
 
-launchNode :: TVar Bool -> String -> MultiConfig -> IO (TVar MetaCache, TVar Bool) 
+launchNode :: TVar Bool 
+           -> String 
+           -> MultiConfig 
+           -> IO (TVar MetaCache, TVar Int, TVar Bool) 
 launchNode endv iname mc = do
   nV <- newTVarIO False
   mcV <- newTVarIO mempty :: IO (TVar MetaCache)
+  pinV <- newTVarIO 0
   let (i,s) = fromJust $ mc^.indexWithStorage (indexes.at iname)
       script _ man = do onUp =<< carol man queryT
                         atomically $ check =<< readTVar endv
       api = pack (s^.storageApiMultiAddr)
       onUp s = do 
         mc <- readTVarIO mcV
-        Right (mc',_,_) <- withApi' api (updateMC mc s)
+        Right (mc',new,rmd) <- withApi' api (updateMC mc s)
         atomically $ swapTVar mcV mc'
+        if length new > 0
+           then do forkIO $ do putStrLn $ "[" <> iname <> "] " <> "Pinning " <> show (length new) <> " items..."
+                               atomically $ modifyTVar pinV (+ 1)
+                               pinAll api new
+                               atomically $ modifyTVar pinV (\p -> p - 1)
+                               putStrLn $ "[" <> iname <> "] " <>"Done."
+                               return ()
+                   return ()
+           else return ()
+        if length rmd > 0
+           then forkIO (unpinAll api rmd) >> return ()
+           else return ()
         return ()
       settings = defaultDManagerSettings { onValUpdate = onUp }
   forkIO $ finally (runIndexNode' (i,s) settings script >> return ()) 
                    (atomically $ swapTVar nV True)
-  return (mcV,nV)
+  return (mcV,pinV,nV)
 
 edit :: FilePath -> IO ()
 edit f = do

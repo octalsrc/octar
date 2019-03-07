@@ -4,6 +4,7 @@ module Octar.Live
   ( MultiLive
   , liveConfig
   , liveCache
+  , livePinStatus
   , buildLive
   , indexRefs
   , storageRefs
@@ -23,18 +24,21 @@ import Turtle.Ipfs (IpfsPath)
 
 data MultiLive = MultiLive
   { _liveConfig :: MultiConfig
-  , _liveCache  :: Map String (TVar MetaCache) }
+  , _liveCache  :: Map String (TVar MetaCache)
+  , _livePinStatus :: Map String (TVar Int) }
 
 makeLenses ''MultiLive
 
 initMultiLive :: MultiConfig -> MultiLive
-initMultiLive mc = MultiLive mc mempty
+initMultiLive mc = MultiLive mc mempty mempty
 
-buildLive :: (String -> MultiConfig -> IO (TVar MetaCache, a)) 
+buildLive :: (String -> MultiConfig -> IO (TVar MetaCache, TVar Int, a)) 
           -> MultiConfig 
           -> IO (MultiLive, [a])
-buildLive f mc = foldM (\(ml,rs) iname -> do (tv,r) <- f iname mc
-                                             return (ml & liveCache . at iname ?~ tv, r:rs))
+buildLive f mc = foldM (\(ml,rs) iname -> do (tv,pinV,r) <- f iname mc
+                                             return ( ml & liveCache . at iname ?~ tv
+                                                         & livePinStatus . at iname ?~ pinV
+                                                    , r:rs ))
                        (initMultiLive mc, []) 
                        (mc^.indexNames)
 

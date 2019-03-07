@@ -37,11 +37,13 @@ no resp = resp . responseLBS status404 [("Content-Type","text/plain")]
 runIndexServer :: IServerConf -> MultiLive -> IO ()
 runIndexServer c ml = Warp.run (serverPort c) $ \req resp -> do
   case map T.unpack (pathInfo req) of
-    [iname] -> case ml^.liveCache.at iname of
-      Just cv -> do cache <- readTVarIO cv
-                    let stor = ml^.liveConfig.indexes.at iname.to fromJust.indexStorageName
-                    ok resp (indexWebpage' (serverGateway c) stor cache)
-      Nothing -> no resp "No index by that name exists."
+    [iname] -> case (ml^.liveCache.at iname, ml^.livePinStatus.at iname) of
+      (Just cv, Just pv) -> do 
+        cache <- readTVarIO cv
+        pinStat <- (== 0) <$> readTVarIO pv
+        let stor = ml^.liveConfig.indexes.at iname.to fromJust.indexStorageName
+        ok resp (indexWebpage' (serverGateway c) stor cache pinStat)
+      _ -> no resp "No index by that name exists."
     [] -> ok resp (mainPage (M.keys (ml^.liveConfig.indexes)))
     _ -> no resp "Can't help you there."
 
