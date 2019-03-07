@@ -28,7 +28,8 @@ import System.Posix.Signals
 
 import Octar
 import Octar.Discard
-import Octar.Gateway
+import Octar.IndexServer
+import Octar.GatewayServer
 import Turtle.Ipfs
 import Turtle.Git (sOrDie)
 import qualified Turtle.Git as Git
@@ -120,57 +121,39 @@ mkOctarCLI version methodset = orDie $ do
 
     -- The mirror serves /all/ indexes at the same time, with a
     -- separate discard node for each
-    Mirror c -> do serverInfo <- case (mirrorIndexPort c, mirrorGatewayPort c) of
-                     (Just ip, Just gp) -> return $ Just (ip,gp)
-                     (Nothing,Nothing) -> return $ Nothing
-                     _ -> die "Must have both index and gateway, or neither."
-                   endv <- newTVarIO False
-                   installHandler 
-                     keyboardSignal 
-                     (Catch $ atomically (swapTVar endv True) >> return ()) 
-                     Nothing
-                   (ml,endedVs) <- buildLive (launchNode endv) mc
-                   let server req resp = case map Text.unpack (pathInfo req) of
-                         [iname] -> case ml^.liveCache.at iname of
-                           Just mtcv -> do 
-                             mtc <- readTVarIO mtcv
-                             let gw = "http://localhost:" 
-                                      <> (case serverInfo of
-                                            Just (_,gp) -> show gp)
-                                      <> "/" <> (mc^.indexes.at iname._Just.indexStorageName)
-                             resp $ responseLBS 
-                                      status200 
-                                      [("Content-Type", "text/html")]
-                                      (indexWebpage' gw mtc)
-                           Nothing -> resp $ responseLBS 
-                                               status404 
-                                               [("Content-Type","text/plain")]
-                                               "No index by that name exists."
-                         [] -> resp $ responseLBS 
-                                        status200 
-                                        [("Content-Type","text/html")]
-                                        (mainPage (Map.keys (mc^.indexes)))
-                         _ -> resp $ responseLBS 
-                                       status404 
-                                       [("Content-Type","text/plain")]
-                                       "Try an index."
-                   case serverInfo of
-                     Just (ip,gp) -> do forkIO $ octarGateway gp ml
-                                        forkIO $ Warp.run ip server
-                                        return ()
-                     Nothing -> return ()
-                   waitForExits endedVs
-                   return (Right ())
+    Mirror c -> do
+      endv <- setupEndVar
+      (ml, endedVs) <- buildLive (launchNode endv) mc
 
-      where iss :: [(String,(IndexConfig,StorageConfig))]
-            iss = map (\iname -> (iname, fromJust $ mc^.indexWithStorage (indexes.at iname))) 
-                      (Map.keys (mc^.indexes))
+      -- Launch gateway server if configured
+      case mirrorGatewayPort c of
+        Just port -> forkIO (octarGateway port ml) >> return ()
+        Nothing -> return ()
 
-            -- This should just stop until all launched nodes have
-            -- signalled their exits.  The launched nodes should wait
-            -- on the Ctrl-C signal and then shut down.
-            waitForExits :: [TVar Bool] -> IO ()
-            waitForExits = atomically . mapM_ (\tv -> check =<< readTVar tv)
+      -- Launch index server if configured
+      case (mirrorIndexPort c, indexGatewayUri c) of
+        (Just port, Right uri) -> do
+          forkIO $ runIndexServer (iserverConf uri port) ml
+          return ()
+        (Just _, Left err) -> die (pack err)
+        _ -> return ()
+
+      -- Wait for indexes to exit
+      waitForExits endedVs
+      return $ Right ()
+
+
+waitForExits :: [TVar Bool] -> IO ()
+waitForExits = atomically . mapM_ (\tv -> check =<< readTVar tv)
+
+setupEndVar :: IO (TVar Bool)
+setupEndVar = do
+  endv <- newTVarIO False
+  installHandler 
+    keyboardSignal 
+    (Catch $ atomically (swapTVar endv True) >> return ()) 
+    Nothing
+  return endv
 
 launchNode :: TVar Bool -> String -> MultiConfig -> IO (TVar MetaCache, TVar Bool) 
 launchNode endv iname mc = do

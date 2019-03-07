@@ -32,6 +32,7 @@ library
                      , Octar.Index.Frontend
                      , Octar.Index.Frontend.StaticWeb
                      , Octar.Index2
+                     , Octar.IndexServer
                      , Octar.Discard
                      , Octar.Entry
                      , Octar.Live
@@ -40,7 +41,7 @@ library
                      , Octar.Method.Common
                      , Octar.CLI.Opts
                      , Octar.Config
-                     , Octar.Gateway
+                     , Octar.GatewayServer
   build-depends:
     base                 >= 4.10.0 && < 4.13,
     aeson                >= 1.2.4 && < 1.5,

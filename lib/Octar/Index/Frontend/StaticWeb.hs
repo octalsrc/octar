@@ -19,10 +19,11 @@ import Data.ByteString.Lazy (ByteString)
 import Lucid
 
 indexWebpage :: String -- ^ Storage gateway path
+             -> String -- ^ Storage name
              -> MetaCache -- ^ Index metacache
              -> Html ()
-indexWebpage gw mc = 
-  mkPage (ul_ $ mconcat (map (entry gw) (Map.assocs mc)))
+indexWebpage gw stor mc = 
+  mkPage (ul_ $ mconcat (map (entry (gw <> "/" <> stor)) (Map.assocs mc)))
 
 mainPage :: [String] -> ByteString
 mainPage ss = renderBS (ul_ $ mconcat (map (\p -> li_ (a_ [href_ (Text.pack p)] (toHtml p))) ss))
@@ -34,9 +35,10 @@ mkPage b =
      <> body_ b)
 
 indexWebpage' :: String -- ^ Storage gateway path
+              -> String -- ^ Storage name
               -> MetaCache -- ^ Index metacache
               -> ByteString
-indexWebpage' gw mc = renderBS $ indexWebpage gw mc
+indexWebpage' gw stor mc = renderBS $ indexWebpage gw stor mc
 
 entry :: String -- ^ Storage gateway path
       -> (IpfsPath,Metadata)

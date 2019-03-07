@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
 
-module Octar.Gateway (octarGateway) where
+module Octar.GatewayServer (octarGateway) where
 
 import qualified Data.List as L
 import Data.Map (Map)
