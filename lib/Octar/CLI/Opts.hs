@@ -99,7 +99,8 @@ data AddConf m = AddConf
   , addDry :: Bool
   , addNoPrompt :: Bool
   , addCLIMessage :: Maybe Text
-  , addIndexChoice :: Maybe Text }
+  , addIndexChoice :: Maybe Text
+  , addRaw :: Bool }
   deriving (Eq,Ord)
 
 chooseIndex :: MultiConfig -> AddConf m -> Either String (IndexConfig, StorageConfig)
@@ -155,11 +156,14 @@ addPs (m :: m) = AddConf
               ,short 'i'
               ,long "index"
               ,metavar "NAME"])
+  <*> switch (fold [long "raw"
+                   ,help hraw])
   where hmethod = "use GETTER to fetch the target (" ++ (show names) ++ ")"
         hURI = "the location or filepath of the target"
         hnoprompt = "fetch and store target without asking for a synopsis \
                     \or new filename (a \"to be refiled\" temp. synopsis \
                     \will be used)"
+        hraw = "Add a direct entry ref.  Be careful!"
         names = Map.keys (Map.mapKeys Text.unpack (namesMap :: Map Text (Method m)))
 
 

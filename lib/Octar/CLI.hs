@@ -51,7 +51,7 @@ version = "0.4.0"
 refileSynopsis = "(To be refiled)"
 
 fetchByConf :: (MethodSet m) => AddConf m -> EntryFrame -> IO (Either Text MetaFrame)
-fetchByConf (AddConf trg mth _ noprompt _ _) ef = 
+fetchByConf (AddConf trg mth _ noprompt _ _ _) ef = 
   fetch mth (AddInfo ef noprompt trg)
 
 orDie :: (MonadIO m) => m (Either Text a) -> m a
@@ -85,24 +85,30 @@ mkOctarCLI version methodset = orDie $ do
   
     Add c -> case chooseIndex mc c of
       Right (i,s) -> do 
-        efr <- mkEntryFrame
-        let ms = [case (addNoPrompt c, addCLIMessage c) of
-                    (_,Just m) -> return . mkSynopsis $ m
-                    (True,_) -> return . mkSynopsis $ refileSynopsis
-                    _ -> askSynopsisEdit
-                 ,orDie$ fetchByConf c efr]
-        md <- mkMD (Text.pack $ i^.indexArchivist) =<< mmconcat ms
-        if addDry c
-           then die "Dry run, not writing to index."
-           else return ()
-        putStr "Storing entry...  " >> IO.hFlush IO.stdout
-        ref <- withApi' (Text.pack $ s^.storageApiMultiAddr) (storeEntry md efr) >>= \case
-          Right ent -> return . fst . entryPair $ ent
-          Left e -> die e
-        putStrLn "Done."
-
-        runIndexNodeAwait (i,s) $ \_ cc -> carol cc $ issue (ef$ RGAppend ref)
-        return (Right ())
+        if addRaw c
+           then case mkIpfsPath (addTarget c) of
+                  Right ref -> do runIndexNodeAwait 
+                                   (i,s) 
+                                   (\_ cc -> carol cc $ issue (ef$ RGAppend ref))
+                                  return (Right ())
+                  Left e -> die e
+           else do efr <- mkEntryFrame
+                   let ms = [case (addNoPrompt c, addCLIMessage c) of
+                               (_,Just m) -> return . mkSynopsis $ m
+                               (True,_) -> return . mkSynopsis $ refileSynopsis
+                               _ -> askSynopsisEdit
+                            ,orDie$ fetchByConf c efr]
+                   md <- mkMD (Text.pack $ i^.indexArchivist) =<< mmconcat ms
+                   if addDry c
+                      then die "Dry run, not writing to index."
+                      else return ()
+                   putStr "Storing entry...  " >> IO.hFlush IO.stdout
+                   ref <- withApi' (Text.pack $ s^.storageApiMultiAddr) (storeEntry md efr) >>= \case
+                     Right ent -> return . fst . entryPair $ ent
+                     Left e -> die e
+                   putStrLn "Done."
+                   runIndexNodeAwait (i,s) $ \_ cc -> carol cc $ issue (ef$ RGAppend ref)
+                   return (Right ())
 
       Left e -> die (Text.pack e)
 
