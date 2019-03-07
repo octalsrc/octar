@@ -20,6 +20,7 @@ import Data.Text (Text,pack,unpack,stripEnd)
 import qualified Data.Text as Text
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Control.Exception (finally)
 import Control.Lens
 import Data.Maybe
 import Control.Concurrent.STM
@@ -169,9 +170,8 @@ launchNode endv iname mc = do
         atomically $ swapTVar mcV mc'
         return ()
       settings = defaultDManagerSettings { onValUpdate = onUp }
-  forkIO $ do runIndexNode' (i,s) settings script
-              atomically $ swapTVar nV True
-              return ()
+  forkIO $ finally (runIndexNode' (i,s) settings script >> return ()) 
+                   (atomically $ swapTVar nV True)
   return (mcV,nV)
 
 edit :: FilePath -> IO ()
