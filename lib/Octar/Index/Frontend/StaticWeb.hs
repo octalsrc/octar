@@ -7,6 +7,7 @@ module Octar.Index.Frontend.StaticWeb
 
   ) where
 
+import Data.List (sortOn)
 import Octar.Index (MetaCache)
 import Octar.Metadata
 import Turtle.Ipfs
@@ -27,7 +28,8 @@ indexWebpage gw stor mc pstat =
   mkPage $ do if pstat
                  then p_ "Pin status: ✔"
                  else p_ "Pin status: ❌"
-              ul_ $ mconcat (map (entry (gw <> "/" <> stor)) (Map.assocs mc))
+              ul_ $ mconcat (map (entry (gw <> "/" <> stor)) entries)
+  where entries = reverse $ sortOn (metaDate.snd) (Map.assocs mc)
 
 mainPage :: [String] -> ByteString
 mainPage ss = renderBS (ul_ $ mconcat (map (\p -> li_ (a_ [href_ (Text.pack p)] (toHtml p))) ss))

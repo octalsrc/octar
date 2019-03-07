@@ -6,6 +6,7 @@ module Octar.Metadata
   , mfMain
   , mfMessage
   , Timestamp (..)
+  , metaDate
   , SourceRecord (..)
   , stampNow
   , mkSR
@@ -89,6 +90,9 @@ data Metadata = Metadata { metaMain :: MetaFrame
                          , date :: Timestamp
                          , archivist :: Text }
                 deriving (Show,Eq,Ord)
+
+metaDate :: Metadata -> Timestamp
+metaDate = Octar.Metadata.date
 
 instance FromJSON Metadata where
   parseJSON = withObject "Metadata" $ \v -> do
