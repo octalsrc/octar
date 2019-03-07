@@ -8,6 +8,7 @@ module Octar.CLI.Opts
   , AddConf (..)
   , chooseIndex
   , chooseIndexRm
+  , chooseIndexLs
   , RmConf (..)
   , MirrorConf (..)
   , getConfigCLI
@@ -40,6 +41,8 @@ cmds =
       "Add the file located at TARGET to the archive"
   , (mkcmd "rm" Rm (const rmPs))
       "Remove the entry with PATH from the archive"
+  , (mkcmd "ls" Ls (const lsPs))
+      "List the entries in the archive"
   , (mkcmd "sync" id (const.pure$Refresh))
       "Update metacache and directory for index"
   , (mkcmd "mirror" Mirror (const mirrorPs))
@@ -61,6 +64,7 @@ data ConfigCLI m = ConfigCLI
 data Command m =
     Add (AddConf m)
   | Rm RmConf
+  | Ls LsConf
   | Refresh
   | Mirror MirrorConf
   deriving (Eq,Ord)
@@ -109,6 +113,15 @@ chooseIndex mc ac = case Text.unpack <$> addIndexChoice ac of
 
 chooseIndexRm :: MultiConfig -> RmConf -> Either String (IndexConfig, StorageConfig)
 chooseIndexRm mc rc = case Text.unpack <$> rmIndexChoice rc of
+  Just iname -> case mc^.indexWithStorage (indexes.at iname) of
+    Just is -> Right is
+    Nothing -> Left $ "Index \"" <> iname <> "\" is not configured."
+  Nothing -> case mc^.indexWithStorage defaultIndex of
+    Just is -> Right is
+    Nothing -> Left $ "You must choose an index."
+
+chooseIndexLs :: MultiConfig -> LsConf -> Either String (IndexConfig, StorageConfig)
+chooseIndexLs mc rc = case Text.unpack <$> lsIndexChoice rc of
   Just iname -> case mc^.indexWithStorage (indexes.at iname) of
     Just is -> Right is
     Nothing -> Left $ "Index \"" <> iname <> "\" is not configured."
@@ -173,6 +186,18 @@ rmPs = RmConf
               ,short 'i'
               ,long "index"
               ,metavar "NAME"])
+
+data LsConf = LsConf
+  { lsIndexChoice :: Maybe Text }
+  deriving (Eq,Ord)
+
+lsPs :: Parser LsConf
+lsPs = LsConf <$> option 
+                    (readm Text.pack)
+                    (fold [value Nothing
+                          ,short 'i'
+                          ,long "index"
+                          ,metavar "NAME"])
 
 readm :: (String -> a) -> ReadM (Maybe a)
 readm f = maybeReader (Just . Just . f)

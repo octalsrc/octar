@@ -100,13 +100,17 @@ mkOctarCLI version methodset = orDie $ do
           Left e -> die e
         putStrLn "Done."
 
-        runIndexNodeAwait (i,s) $ \_ cc -> do
-          carol cc $ issue (ef$ RGAppend ref)
-          RGArray es <- carol cc queryT :: IO (RGArray IpfsPath)
-          mapM_ print es
+        runIndexNodeAwait (i,s) $ \_ cc -> carol cc $ issue (ef$ RGAppend ref)
         return (Right ())
 
       Left e -> die (Text.pack e)
+
+    Ls c -> case chooseIndexLs mc c of
+      Right (i,s) -> do
+        RGArray es <- runIndexNodeAwait (i,s) $ \_ cc -> carol cc queryT :: IO (RGArray IpfsPath)
+        mapM_ print es
+        return (Right ())
+      Left e -> die (pack e)
 
     Rm c -> case chooseIndexRm mc c of
       Right (i,s) -> do
