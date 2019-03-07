@@ -29,8 +29,8 @@ storages:
 
   ipfs:
     api-port: 5001
-    gateway: "18564"
+    gateway-port: 18564
 
   alt:
     api-port: 9251
-    gateway: "9252"
+    gateway-port: 9252

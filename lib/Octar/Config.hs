@@ -44,7 +44,7 @@ import Data.Maybe (fromJust)
 
 data StorageConfig = StorageConfig 
   { _storageApiPort :: Int
-  , _storageGateway :: Maybe String }
+  , _storageGateway :: Maybe Int }
 
 makeLenses ''StorageConfig
 
@@ -63,7 +63,7 @@ storageApiHttp = to $ \conf ->
 instance FromJSON StorageConfig where
   parseJSON = withObject "StorageConfig" $ \v -> StorageConfig
     <$> v .: "api-port"
-    <*> v .:? "gateway"
+    <*> v .:? "gateway-port"
 
 data IndexConfig = IndexConfig
   { _indexStorageName :: String

@@ -129,12 +129,8 @@ mkOctarCLI version methodset = orDie $ do
                      keyboardSignal 
                      (Catch $ atomically (swapTVar endv True) >> return ()) 
                      Nothing
-                   (ml,endedVs) <- buildLive (launchNode' endv) mc
-                   undefined
-
-                   tvs <- mapM (launchNode endv) iss
-                   let -- mcMap = Map.fromList (map snd tvs) :: Map String (StorageConfig, TVar MetaCache)
-                       server req resp = case map Text.unpack (pathInfo req) of
+                   (ml,endedVs) <- buildLive (launchNode endv) mc
+                   let server req resp = case map Text.unpack (pathInfo req) of
                          [iname] -> case ml^.liveCache.at iname of
                            Just mtcv -> do 
                              mtc <- readTVarIO mtcv
@@ -163,50 +159,21 @@ mkOctarCLI version methodset = orDie $ do
                                         forkIO $ Warp.run ip server
                                         return ()
                      Nothing -> return ()
-                   waitForExits (map fst tvs)
+                   waitForExits endedVs
                    return (Right ())
 
       where iss :: [(String,(IndexConfig,StorageConfig))]
             iss = map (\iname -> (iname, fromJust $ mc^.indexWithStorage (indexes.at iname))) 
                       (Map.keys (mc^.indexes))
-            
-            -- launchNode' :: TVar Bool -> String -> MultiConfig -> (TVar MetaCache, TVar Bool)
-            -- launchNode' endv iname mc
-
-
-            launchNode :: TVar Bool 
-                       -> (String, (IndexConfig, StorageConfig))
-                       -> IO (TVar Bool, (String, (StorageConfig, TVar MetaCache)))
-            launchNode endv (iname,(i,s)) = do
-              -- The script just waits until the end-signal is true
-              nV <- newTVarIO False
-              mcV <- newTVarIO mempty
-              let script _ man = do onUp =<< carol man queryT
-                                    atomically $ check =<< readTVar endv
-                  api = pack (s^.storageApiMultiAddr)
-                  onUp s = do 
-                    mc <- readTVarIO mcV
-                    print api
-                    Right (mc',_,_) <- withApi' api (updateMC mc s)
-                    atomically $ swapTVar mcV mc'
-                    return ()
-                  settings = defaultDManagerSettings { onValUpdate = onUp }
-              -- The new thread runs the discard node (which exits
-              -- when endv goes to true) and then announces its exit
-              -- by setting its thread-specific nV to true
-              forkIO $ do runIndexNode' (i,s) settings script
-                          atomically $ swapTVar nV True
-                          return ()
-              return (nV,(iname, (s,mcV)))
 
             -- This should just stop until all launched nodes have
             -- signalled their exits.  The launched nodes should wait
-            -- on the Ctrl-C signal and then shut down?
+            -- on the Ctrl-C signal and then shut down.
             waitForExits :: [TVar Bool] -> IO ()
             waitForExits = atomically . mapM_ (\tv -> check =<< readTVar tv)
 
-launchNode' :: TVar Bool -> String -> MultiConfig -> IO (TVar MetaCache, TVar Bool) 
-launchNode' endv iname mc = do
+launchNode :: TVar Bool -> String -> MultiConfig -> IO (TVar MetaCache, TVar Bool) 
+launchNode endv iname mc = do
   nV <- newTVarIO False
   mcV <- newTVarIO mempty :: IO (TVar MetaCache)
   let (i,s) = fromJust $ mc^.indexWithStorage (indexes.at iname)
@@ -215,7 +182,6 @@ launchNode' endv iname mc = do
       api = pack (s^.storageApiMultiAddr)
       onUp s = do 
         mc <- readTVarIO mcV
-        print api
         Right (mc',_,_) <- withApi' api (updateMC mc s)
         atomically $ swapTVar mcV mc'
         return ()
