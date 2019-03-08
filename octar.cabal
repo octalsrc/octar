@@ -75,3 +75,4 @@ executable octar
   build-depends:       base, octar
   hs-source-dirs:      main
   default-language:    Haskell2010
+  ghc-options:       -threaded

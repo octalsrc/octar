@@ -72,7 +72,8 @@ data Command m =
 data MirrorConf = MirrorConf 
   { mirrorIndexPort :: Maybe Int
   , mirrorGatewayPort :: Maybe Int
-  , mirrorGatewayExternalUri :: Maybe String } 
+  , mirrorGatewayExternalUri :: Maybe String
+  , mirrorNoPin :: Bool } 
   deriving (Eq,Ord)
 
 mirrorPs :: Parser MirrorConf
@@ -92,6 +93,8 @@ mirrorPs = MirrorConf
               <> long "external-gateway"
               <> short 'e'
               <> metavar "URI")
+  <*> switch (long "no-pin"
+              <> help "Do not pin newly-received items")
 
 data AddConf m = AddConf
   { addTarget :: Text

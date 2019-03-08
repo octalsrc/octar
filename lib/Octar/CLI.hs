@@ -135,7 +135,7 @@ mkOctarCLI version methodset = orDie $ do
     -- separate discard node for each
     Mirror c -> do
       endv <- setupEndVar
-      (ml, endedVs) <- buildLive (launchNode endv) mc
+      (ml, endedVs) <- buildLive (launchNode endv (not $ mirrorNoPin c)) mc
 
       -- Launch gateway server if configured
       case mirrorGatewayPort c of
@@ -167,11 +167,12 @@ setupEndVar = do
     Nothing
   return endv
 
-launchNode :: TVar Bool 
+launchNode :: TVar Bool
+           -> Bool
            -> String 
            -> MultiConfig 
            -> IO (TVar MetaCache, TVar Int, TVar Bool) 
-launchNode endv iname mc = do
+launchNode endv pinB iname mc = do
   nV <- newTVarIO False
   mcV <- newTVarIO mempty :: IO (TVar MetaCache)
   pinV <- newTVarIO 0
@@ -180,10 +181,11 @@ launchNode endv iname mc = do
                         atomically $ check =<< readTVar endv
       api = pack (s^.storageApiMultiAddr)
       onUp s = do 
+        -- putStrLn "Running onUp..."
         mc <- readTVarIO mcV
         Right (mc',new,rmd) <- withApi' api (updateMC mc s)
         atomically $ swapTVar mcV mc'
-        if length new > 0
+        if length new > 0 && pinB
            then do forkIO $ do putStrLn $ "[" <> iname <> "] " <> "Pinning " <> show (length new) <> " items..."
                                atomically $ modifyTVar pinV (+ 1)
                                pinAll api new
