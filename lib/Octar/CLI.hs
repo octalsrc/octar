@@ -36,7 +36,7 @@ import Turtle.Git (sOrDie)
 import qualified Turtle.Git as Git
 import Octar.CLI.Opts
 import Octar.Index.Frontend.StaticWeb
-import Octar.Index (MetaCache)
+import Octar.Index (MetaCache,loadPF)
 import Octar.Pin
 
 import Network.Discard (defaultDManagerSettings, onValUpdate)
@@ -110,6 +110,14 @@ mkOctarCLI version methodset = orDie $ do
                    runIndexNodeAwait (i,s) $ \_ cc -> carol cc $ issue (ef$ RGAppend ref)
                    return (Right ())
 
+      Left e -> die (Text.pack e)
+
+    Import c -> case chooseIndexImport mc c of
+      Right (i,s) -> loadPF (fromText . pack . importFile $ c) >>= \case
+        Right refs -> do let e = foldl (\e ref -> e |>>| ef (RGAppend ref)) ef0 refs
+                         runIndexNodeAwait (i,s) (\_ cc -> carol cc $ issue e)
+                         return (Right ())
+        Left e -> die e
       Left e -> die (Text.pack e)
 
     Ls c -> case chooseIndexLs mc c of

@@ -6,9 +6,11 @@ module Octar.CLI.Opts
   ( ConfigCLI (configConfFile, configCommand)
   , Command (..)
   , AddConf (..)
+  , ImportConf (..)
   , chooseIndex
   , chooseIndexRm
   , chooseIndexLs
+  , chooseIndexImport
   , RmConf (..)
   , MirrorConf (..)
   , getConfigCLI
@@ -43,6 +45,8 @@ cmds =
       "Remove the entry with PATH from the archive"
   , (mkcmd "ls" Ls (const lsPs))
       "List the entries in the archive"
+  , (mkcmd "import" Import (const importPs))
+      "Import a pinfile"
   , (mkcmd "sync" id (const.pure$Refresh))
       "Update metacache and directory for index"
   , (mkcmd "mirror" Mirror (const mirrorPs))
@@ -65,6 +69,7 @@ data Command m =
     Add (AddConf m)
   | Rm RmConf
   | Ls LsConf
+  | Import ImportConf
   | Refresh
   | Mirror MirrorConf
   deriving (Eq,Ord)
@@ -126,6 +131,15 @@ chooseIndexRm mc rc = case Text.unpack <$> rmIndexChoice rc of
 
 chooseIndexLs :: MultiConfig -> LsConf -> Either String (IndexConfig, StorageConfig)
 chooseIndexLs mc rc = case Text.unpack <$> lsIndexChoice rc of
+  Just iname -> case mc^.indexWithStorage (indexes.at iname) of
+    Just is -> Right is
+    Nothing -> Left $ "Index \"" <> iname <> "\" is not configured."
+  Nothing -> case mc^.indexWithStorage defaultIndex of
+    Just is -> Right is
+    Nothing -> Left $ "You must choose an index."
+
+chooseIndexImport :: MultiConfig -> ImportConf -> Either String (IndexConfig, StorageConfig)
+chooseIndexImport mc rc = case Text.unpack <$> importIndexChoice rc of
   Just iname -> case mc^.indexWithStorage (indexes.at iname) of
     Just is -> Right is
     Nothing -> Left $ "Index \"" <> iname <> "\" is not configured."
@@ -205,6 +219,21 @@ lsPs = LsConf <$> option
                           ,short 'i'
                           ,long "index"
                           ,metavar "NAME"])
+
+data ImportConf = ImportConf
+  { importIndexChoice :: Maybe Text
+  , importFile :: String }
+  deriving (Eq,Ord)
+
+importPs :: Parser ImportConf
+importPs = ImportConf 
+  <$> option 
+        (readm Text.pack) 
+        (fold [value Nothing
+              ,short 'i'
+              ,long "index"
+              ,metavar "NAME"])
+  <*> strArgument (metavar "FILE")
 
 readm :: (String -> a) -> ReadM (Maybe a)
 readm f = maybeReader (Just . Just . f)
