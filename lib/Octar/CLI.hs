@@ -46,7 +46,7 @@ import Network.Wai
 import Network.HTTP.Types (status200,status404)
 import qualified Network.Wai.Handler.Warp as Warp (run)
 
-version = "0.4.0"
+version = "1.0.0"
 
 refileSynopsis = "(To be refiled)"
 
