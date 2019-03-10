@@ -12,10 +12,14 @@ import Octar.Index (MetaCache)
 import Octar.Metadata
 import Turtle.Ipfs
 import Turtle (format,fp)
+import Data.Text (Text)
 import qualified Data.Text as Text
+import Data.Text.Encoding (encodeUtf8, decodeUtf8)
 import Data.Monoid (mconcat)
 import qualified Data.Map as Map
 import Data.ByteString.Lazy (ByteString)
+import qualified Data.ByteString.Char8 as BS
+import Network.HTTP.Types (urlEncode)
 
 import Lucid
 
@@ -30,6 +34,9 @@ indexWebpage gw stor mc pstat =
                  else p_ "Pin status: ❌"
               ul_ $ mconcat (map (entry (gw <> "/" <> stor)) entries)
   where entries = reverse $ sortOn (metaDate.snd) (Map.assocs mc)
+
+urlEncodeT :: Text -> Text
+urlEncodeT = decodeUtf8 . urlEncode False . encodeUtf8
 
 mainPage :: [String] -> ByteString
 mainPage ss = renderBS (ul_ $ mconcat (map (\p -> li_ (a_ [href_ (Text.pack p)] (toHtml p))) ss))
@@ -52,7 +59,7 @@ entry :: String -- ^ Storage gateway path
       -> Html ()
 entry gw (ref,(Metadata (MetaFrame msg _ mep) _ _)) = 
   let ep = case mep of
-             Just ep -> "/" <> format fp ep
+             Just ep -> "/" <> urlEncodeT (format fp ep)
              Nothing -> ""
       lnk = Text.pack gw <> "/" <> ipfsPath ref <> "/item" <> ep
       hdline = head $ Text.lines msg

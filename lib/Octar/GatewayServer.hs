@@ -9,8 +9,9 @@ import qualified Data.Map as M
 import Data.Maybe (fromJust)
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Text.Encoding (encodeUtf8)
-import Data.ByteString.Lazy (ByteString)
+import Data.Text.Encoding (encodeUtf8,decodeUtf8)
+import Data.ByteString.Builder (toLazyByteString)
+import Data.ByteString.Lazy (ByteString, toStrict)
 import qualified Data.ByteString.Char8 as BS
 
 import Control.Lens
@@ -28,10 +29,6 @@ import Turtle.Ipfs (unsafeIpfsPath)
 mk404 :: ByteString -> WaiProxyResponse
 mk404 = WPRResponse . responseLBS status404 [("Content-Type","text/plain")]
 
-renderPath :: [Text] -> BS.ByteString
-renderPath = encodeUtf8 . mconcat . L.intersperse "/"
-
-
 octarGateway :: Int -> MultiLive -> IO ()
 octarGateway port ml = run port . waiProxyTo proxy defaultOnExc 
                        =<< newManager defaultManagerSettings
@@ -42,8 +39,12 @@ octarGateway port ml = run port . waiProxyTo proxy defaultOnExc
               refs | unsafeIpfsPath ref `elem` refs -> 
                      case ml^.liveConfig.storages.at (T.unpack stor).to fromJust.storageGateway of
                        Just sPort -> 
-                         let req' = req { rawPathInfo = renderPath ("ipfs":ref:p)
-                                        , pathInfo = "ipfs":ref:p }
+                         let pInf = "ipfs":ref:p
+                             pInfRaw = toStrict 
+                                       . toLazyByteString 
+                                       . encodePathSegments 
+                                       $ pInf
+                             req' = req { rawPathInfo =  pInfRaw }
                              dest = ProxyDest "localhost" (sPort)
                              upLoc = map $ \case
                                ("Location",loc) -> 
