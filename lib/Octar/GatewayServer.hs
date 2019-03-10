@@ -41,9 +41,19 @@ octarGateway port ml = run port . waiProxyTo proxy defaultOnExc
             Just getRefs -> getRefs >>= \case
               refs | unsafeIpfsPath ref `elem` refs -> 
                      case ml^.liveConfig.storages.at (T.unpack stor).to fromJust.storageGateway of
-                       Just sPort -> let req' = req { rawPathInfo = renderPath ("ipfs":ref:p) }
-                                         dest = ProxyDest "localhost" (sPort)
-                                     in return (WPRModifiedRequest req' dest)
+                       Just sPort -> 
+                         let req' = req { rawPathInfo = renderPath ("ipfs":ref:p)
+                                        , pathInfo = "ipfs":ref:p }
+                             dest = ProxyDest "localhost" (sPort)
+                             upLoc = map $ \case
+                               ("Location",loc) -> 
+                                 let stor8 = "/" <> encodeUtf8 stor <> "/"
+                                     loc' = case BS.stripPrefix "/ipfs/" loc of
+                                              Just item -> stor8 <> item
+                                              Nothing -> loc
+                                 in ("Location",loc')
+                               h -> h
+                         in return (WPRModifiedRequest req' dest upLoc)
                        Nothing -> return notConfigured
                    | otherwise -> return itemNotFound
           _ -> return $ mk404 "Can't help you there."
